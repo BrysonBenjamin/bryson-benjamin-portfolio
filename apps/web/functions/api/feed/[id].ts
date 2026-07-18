@@ -10,7 +10,15 @@ type FeedDetailRow = {
   body: string | null;
   links_json: string;
   tone: string;
+  parent_id: string | null;
   updated_at: string;
+};
+
+type FeedSummaryRow = {
+  id: string;
+  state: string;
+  title: string;
+  tone: string;
 };
 
 type FeedLink = {
@@ -56,18 +64,42 @@ export async function onRequestGet(context: { env: Env; params: { id: string } }
     );
   }
 
-  const row = await context.env.PUBLIC_FEED_DB.prepare(
-    `SELECT id, state, title, detail, body, links_json, tone, updated_at
-      FROM public_feed_items
-      WHERE workspace = ? AND is_public = 1 AND id = ?
-      LIMIT 1`
-  )
+  const db = context.env.PUBLIC_FEED_DB;
+
+  const row = await db
+    .prepare(
+      `SELECT id, state, title, detail, body, links_json, tone, parent_id, updated_at
+        FROM public_feed_items
+        WHERE workspace = ? AND is_public = 1 AND id = ?
+        LIMIT 1`
+    )
     .bind(WORKSPACE, context.params.id)
     .first<FeedDetailRow>();
 
   if (!row) {
     return Response.json({ error: "Not found" }, { headers: jsonHeaders, status: 404 });
   }
+
+  const [parentResult, subtasksResult] = await Promise.all([
+    row.parent_id
+      ? db
+          .prepare(
+            `SELECT id, state, title, tone FROM public_feed_items
+              WHERE workspace = ? AND is_public = 1 AND id = ?
+              LIMIT 1`
+          )
+          .bind(WORKSPACE, row.parent_id)
+          .first<FeedSummaryRow>()
+      : Promise.resolve(null),
+    db
+      .prepare(
+        `SELECT id, state, title, tone FROM public_feed_items
+          WHERE workspace = ? AND is_public = 1 AND parent_id = ?
+          ORDER BY sort_order ASC, updated_at DESC`
+      )
+      .bind(WORKSPACE, row.id)
+      .all<FeedSummaryRow>()
+  ]);
 
   return Response.json(
     {
@@ -80,7 +112,16 @@ export async function onRequestGet(context: { env: Env; params: { id: string } }
         body: row.body ?? row.detail,
         links: parseLinks(row.links_json),
         tone: normalizeTone(row.tone),
-        updatedAt: row.updated_at
+        updatedAt: row.updated_at,
+        parent: parentResult
+          ? { id: parentResult.id, state: parentResult.state, title: parentResult.title, tone: normalizeTone(parentResult.tone) }
+          : null,
+        subtasks: (subtasksResult.results ?? []).map((subtask) => ({
+          id: subtask.id,
+          state: subtask.state,
+          title: subtask.title,
+          tone: normalizeTone(subtask.tone)
+        }))
       }
     },
     { headers: jsonHeaders }

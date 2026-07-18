@@ -33,6 +33,7 @@ The sync maps Linear records into the public projection:
 - `links`: `{ label, url }` pairs pulled from the issue's attachments
 - `tone`: derived from the Linear state type (`backlog`/`unstarted` → `blue`, `started` → `amber`, `completed` → `mint`)
 - `updatedAt`: Linear's `updatedAt`
+- `parentId`: Linear's `parent.identifier`, but only if that parent is *also* in this run's gated set — otherwise `null`. See [Sub-Issues](#sub-issues) below.
 
 ## Architecture Decision: D1-Direct, No Postgres Detour
 
@@ -61,6 +62,16 @@ Steps 3 and 4 together make each run a full mirror of the current gate, not an a
 
 If step 2 or step 3 throws (rate limit, network error, bad response), the run stops before step 4 runs — a failed fetch never wipes existing rows. The prune step only runs after a fully successful fetch and upsert.
 
+## Sub-Issues
+
+Linear models sub-issues as ordinary Issues with a `parent` field — there's no separate "sub-issue" type, and a parent/child pair can each carry their own labels, state, and assignee independently.
+
+That means the existing label gate already does the right thing for hierarchy with no extra logic: a sub-issue only syncs if *it* carries `public-feed`, regardless of whether its parent does. A child can be public while its parent stays private, or vice versa.
+
+`public_feed_items.parent_id` (added in `apps/web/d1/0002-add-parent-id.sql`) stores the link, but only when the parent is *also* in that run's gated set — a child whose parent isn't public gets `parent_id = NULL` rather than a link to a page that doesn't exist. `/api/feed/:id` resolves this into `parent` (a summary of the parent, if any) and `subtasks` (a list of children whose `parent_id` points here), and `TaskDetail` renders a "Part of ..." breadcrumb and a subtask list from those.
+
+This only walks one level (immediate parent, immediate children) — a sub-issue's own children aren't recursively resolved. Deeper nesting can be added later if it comes up.
+
 ## Rate Limits And Reliability
 
 The script inspects `X-RateLimit-Requests-Remaining` and logs a warning if it drops below 50. A `429` response stops the run cleanly without deleting any existing rows.
@@ -79,12 +90,13 @@ CLOUDFLARE_ACCOUNT_ID=
 
 `CLOUDFLARE_API_TOKEN` needs D1 edit permission on the `brysonbenjamin-public` database (a Custom Token, scoped to `Account > D1 > Edit` on that one account — see the token creation notes for exact steps). Until `LINEAR_API_KEY` and the Cloudflare secrets are set, the workflow runs and no-ops harmlessly.
 
-## D1 Schema Migration
+## D1 Schema Migrations
 
-The `brysonbenjamin-public` database predates the `body` and `links_json` columns. Run once against the live database:
+The `brysonbenjamin-public` database predates some columns. Run these once each against the live database:
 
 ```bash
 wrangler d1 execute brysonbenjamin-public --remote --file=apps/web/d1/0001-add-detail-columns.sql
+wrangler d1 execute brysonbenjamin-public --remote --file=apps/web/d1/0002-add-parent-id.sql
 ```
 
-Fresh installs get these columns automatically from `apps/web/d1/public-feed.sql`.
+Fresh installs get all of these automatically from `apps/web/d1/public-feed.sql`.
