@@ -82,5 +82,5 @@ Recommended production domains:
 
 ## Linear Sync
 
-The public feed is database-backed and syncs daily from Linear via a Render Cron Job, mirroring only issues explicitly labeled `public-feed`.
+The public feed is database-backed and syncs daily from Linear via a GitHub Actions workflow, mirroring only issues explicitly labeled `public-feed`.
 See [docs/linear-sync.md](docs/linear-sync.md) for the schedule, public gate, storage model, and required env vars.

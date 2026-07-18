@@ -32,40 +32,6 @@ services:
       - key: DATABASE_URL
         sync: false
 
-  - type: cron
-    name: bryson-benjamin-linear-feed-sync
-    runtime: node
-    plan: free
-    region: oregon
-    branch: main
-    schedule: "0 13 * * *"
-    buildCommand: bun install --frozen-lockfile && bun run build:api
-    startCommand: bun run --cwd apps/api sync:linear
-    buildFilter:
-      paths:
-        - apps/api/**
-        - package.json
-        - bun.lock
-        - tsconfig.base.json
-        - render.yaml
-      ignoredPaths:
-        - apps/web/**
-        - README.md
-        - docs/**
-    envVars:
-      - key: BUN_VERSION
-        value: "1.3.9"
-      - key: PUBLIC_WORKSPACE_KEY
-        value: brysonbenjamin
-      - key: LINEAR_API_KEY
-        sync: false
-      - key: LINEAR_TEAM_KEYS
-        value: BRY
-      - key: LINEAR_PUBLIC_LABELS
-        value: public-feed
-      - key: CLOUDFLARE_API_TOKEN
-        sync: false
-      - key: CLOUDFLARE_ACCOUNT_ID
-        sync: false
-      - key: CLOUDFLARE_D1_DATABASE_ID
-        value: 630b3025-d7a9-4039-bf3e-0ca97bda6843
+# The Linear feed sync runs on a schedule via GitHub Actions
+# (.github/workflows/linear-feed-sync.yml), not Render Cron —
+# Cron Jobs aren't available on Render's free plan.

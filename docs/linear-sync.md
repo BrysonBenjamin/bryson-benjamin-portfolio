@@ -45,7 +45,9 @@ That's more infrastructure than a personal portfolio's issue volume justifies. T
 
 ## Predictable Pull Model
 
-Scheduled as a Render Cron Job (`bryson-benjamin-linear-feed-sync` in `render.yaml`), daily at `0 13 * * *` (UTC).
+Scheduled as a GitHub Actions workflow (`.github/workflows/linear-feed-sync.yml`), daily at `0 13 * * *` (UTC), plus `workflow_dispatch` for manual runs from the Actions tab.
+
+Render Cron Jobs would have been the natural home (this repo's backend already lives on Render), but Cron Jobs require a paid Render plan. GitHub Actions' free tier comfortably covers a once-a-day job, and it's where the secrets should live anyway, per the "secrets live where the code executes" rule — see [Secrets](#secrets) below.
 
 The job:
 
@@ -59,21 +61,19 @@ The five-minute overlap / watermark logic from the original draft doesn't apply 
 
 The script inspects `X-RateLimit-Requests-Remaining` and logs a warning if it drops below 50. A `429` response stops the run cleanly without deleting any existing rows.
 
-## Render Environment
+## Secrets
 
-Set on the `bryson-benjamin-linear-feed-sync` cron service:
+Set as **GitHub Actions repository secrets** (Settings → Secrets and variables → Actions), not Render — the workflow is what executes the sync, so that's where the credentials need to live:
 
 ```text
 LINEAR_API_KEY=
-LINEAR_TEAM_KEYS=BRY
-LINEAR_PUBLIC_LABELS=public-feed
-PUBLIC_WORKSPACE_KEY=brysonbenjamin
 CLOUDFLARE_API_TOKEN=
 CLOUDFLARE_ACCOUNT_ID=
-CLOUDFLARE_D1_DATABASE_ID=630b3025-d7a9-4039-bf3e-0ca97bda6843
 ```
 
-`CLOUDFLARE_API_TOKEN` needs D1 edit permission on the `brysonbenjamin-public` database. Until `LINEAR_API_KEY` and the Cloudflare secrets are set on Render, the cron job runs and no-ops harmlessly.
+`LINEAR_TEAM_KEYS`, `LINEAR_PUBLIC_LABELS`, `PUBLIC_WORKSPACE_KEY`, and `CLOUDFLARE_D1_DATABASE_ID` aren't secret and are set directly in the workflow file's `env:` block.
+
+`CLOUDFLARE_API_TOKEN` needs D1 edit permission on the `brysonbenjamin-public` database (a Custom Token, scoped to `Account > D1 > Edit` on that one account — see the token creation notes for exact steps). Until `LINEAR_API_KEY` and the Cloudflare secrets are set, the workflow runs and no-ops harmlessly.
 
 ## D1 Schema Migration
 
