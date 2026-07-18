@@ -1,100 +1,86 @@
 # Linear Public Feed Sync
 
-This is the intended shape for pulling Linear into the public build feed without turning the private workspace into public content by accident.
+This is the shape for pulling Linear into the public build feed without turning the private workspace into public content by accident.
 
 ## Principle
 
 Linear is the private operating system. The website should only receive a deliberate public projection of that work.
 
-That means the sync should never publish raw descriptions, comments, attachments, private project names, or arbitrary issue titles by default. The public feed should be label-gated, allowlisted, and idempotently mirrored into our database.
+That means the sync never publishes raw descriptions, comments, or private project names by default. The public feed is label-gated, allowlisted, and idempotently mirrored into the site's D1 database. Attachments on a gated issue (GitHub PRs, design docs, external links) are treated as intentionally-curated "documentation links" and are mirrored too, since adding them to an already-public issue is itself a deliberate act.
 
 ## Source
 
 - API: Linear GraphQL API at `https://api.linear.app/graphql`
-- Auth for the first version: personal API key in `LINEAR_API_KEY`
-- Auth later, if other people need to connect their workspaces: OAuth 2.0
-- Scope: read-only key, limited to the intended team(s) where Linear allows it
+- Auth: personal API key in `LINEAR_API_KEY` (read-only scope where Linear allows it)
+- Scope: `LINEAR_TEAM_KEYS=BRY` (the Brysonbenjamin team)
 
 ## Public Gate
 
 Only sync issues that match all of these:
 
-- Team key is in `LINEAR_TEAM_KEYS`; leave this blank until the intended Linear team is confirmed
+- Team key is in `LINEAR_TEAM_KEYS`
 - Issue has a public label from `LINEAR_PUBLIC_LABELS`, defaulting to `public-feed`
-- Issue is not archived or canceled
+- Issue is not canceled
 
-The sync should map Linear records into public fields:
+The sync maps Linear records into the public projection:
 
-- `id`: stable Linear issue UUID
-- `identifier`: display-safe issue key, such as `BB-12`
-- `state`: public state label
-- `title`: curated title or Linear title only after the issue is marked public
-- `detail`: short curated summary
-- `tone`: one of the existing feed tones: `mint`, `amber`, `white`, `blue`
-- `url`: optional public Linear URL if we decide those are useful
-- `updatedAt`: Linear `updatedAt`
+- `id`: the issue identifier (e.g. `BRY-5`), used as the D1 primary key
+- `state`: the Linear workflow state name
+- `title`: the Linear issue title
+- `detail`: first paragraph of the description, truncated to a card-sized teaser
+- `body`: the full description, shown on the task's detail page
+- `links`: `{ label, url }` pairs pulled from the issue's attachments
+- `tone`: derived from the Linear state type (`backlog`/`unstarted` → `blue`, `started` → `amber`, `completed` → `mint`)
+- `updatedAt`: Linear's `updatedAt`
+
+## Architecture Decision: D1-Direct, No Postgres Detour
+
+An earlier draft of this doc proposed a Postgres-backed mirror (`linear_sync_runs`, `linear_sync_state`, `linear_issue_mirror`) with a watermark-based incremental pull, written by a Render cron job, with `/api/feed` either reading Postgres directly or a D1 edge cache kept in sync with it.
+
+That's more infrastructure than a personal portfolio's issue volume justifies. The implemented version simplifies to:
+
+- A single Bun script (`apps/api/src/jobs/syncLinearFeed.ts`) queries all non-canceled, `public-feed`-labeled issues on the `BRY` team in one page (issue volume here is in the dozens, not thousands — no pagination or watermark needed for now).
+- It upserts directly into the same Cloudflare D1 database (`brysonbenjamin-public`) that `/api/feed` already reads, via the Cloudflare D1 REST API (`CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_D1_DATABASE_ID`).
+- No private Postgres mirror exists yet. If issue volume or audit needs grow, add `linear_issue_mirror` and a watermark then — not before.
 
 ## Predictable Pull Model
 
-Use a Render Cron Job once the sync script exists.
+Scheduled as a Render Cron Job (`bryson-benjamin-linear-feed-sync` in `render.yaml`), daily at `0 13 * * *` (UTC).
 
-Recommended first schedule:
+The job:
 
-```cron
-*/30 * * * *
-```
+1. Reads `LINEAR_API_KEY`, `LINEAR_TEAM_KEYS`, `LINEAR_PUBLIC_LABELS` from env. If any required var (including the Cloudflare ones) is missing, it logs and exits 0 — a safe no-op, matching the existing convention on `apps/api`.
+2. Queries Linear for matching issues.
+3. Upserts each into `public_feed_items` by id. Old rows are left alone if a run fails partway.
 
-The job should:
-
-1. Read the previous `last_seen_updated_at` watermark from the database.
-2. Query Linear for issues updated since `last_seen_updated_at - 5 minutes`.
-3. Page through results with `pageInfo.hasNextPage` and `endCursor`.
-4. Upsert rows by Linear issue UUID.
-5. Advance the watermark only after every page in the run succeeds.
-6. Preserve old rows if Linear is temporarily unavailable.
-
-The five-minute overlap makes the pull resilient to clock drift, late writes, and failed runs. Upserts make that overlap harmless.
-
-## Storage Shape
-
-The backend database should eventually own these tables:
-
-- `linear_sync_runs`: one row per job run with start time, finish time, status, item count, and error text.
-- `linear_sync_state`: one row per source namespace, storing the last successful `updatedAt` watermark and cursor metadata.
-- `linear_issue_mirror`: private mirror of the small Linear fields needed for review and debugging.
-- `public_feed_items`: the public projection consumed by the frontend.
-
-Right now the live frontend reads a Cloudflare D1-backed public feed. When Render becomes the backend source of truth, either:
-
-- the frontend calls `https://api.brysonbenjamin.com/api/feed`, or
-- a Render cron writes the curated projection into Cloudflare D1 as an edge cache.
-
-Prefer the first path unless we need the D1 edge cache for latency or resilience.
+The five-minute overlap / watermark logic from the original draft doesn't apply here since there's no incremental pull — every run re-fetches the full gated set, which is cheap at this scale.
 
 ## Rate Limits And Reliability
 
-Every Linear response should be inspected for:
-
-- `X-RateLimit-Requests-Remaining`
-- `X-RateLimit-Requests-Reset`
-- `X-Complexity`
-- `X-RateLimit-Complexity-Remaining`
-
-If remaining budget is low or Linear returns `429`, the job should stop cleanly, record a partial run, and retry on the next cron tick. No public rows should be deleted just because a pull failed.
+The script inspects `X-RateLimit-Requests-Remaining` and logs a warning if it drops below 50. A `429` response stops the run cleanly without deleting any existing rows.
 
 ## Render Environment
 
-These should be secrets or environment variables on the cron service:
+Set on the `bryson-benjamin-linear-feed-sync` cron service:
 
 ```text
-DATABASE_URL=
-PUBLIC_WORKSPACE_KEY=brysonbenjamin
 LINEAR_API_KEY=
-LINEAR_TEAM_KEYS=
+LINEAR_TEAM_KEYS=BRY
 LINEAR_PUBLIC_LABELS=public-feed
-LINEAR_SYNC_LOOKBACK_MINUTES=5
+PUBLIC_WORKSPACE_KEY=brysonbenjamin
+CLOUDFLARE_API_TOKEN=
+CLOUDFLARE_ACCOUNT_ID=
+CLOUDFLARE_D1_DATABASE_ID=630b3025-d7a9-4039-bf3e-0ca97bda6843
 ```
 
-Do not add the cron service to `render.yaml` until the sync script exists and has a safe no-op path for missing credentials.
+`CLOUDFLARE_API_TOKEN` needs D1 edit permission on the `brysonbenjamin-public` database. Until `LINEAR_API_KEY` and the Cloudflare secrets are set on Render, the cron job runs and no-ops harmlessly.
 
-Before enabling the cron, create or confirm the Linear team that should feed the public `brysonbenjamin` workspace. The sync should do nothing if `LINEAR_TEAM_KEYS` is empty.
+## D1 Schema Migration
+
+The `brysonbenjamin-public` database predates the `body` and `links_json` columns. Run once against the live database:
+
+```bash
+wrangler d1 execute brysonbenjamin-public --remote --file=apps/web/d1/0001-add-detail-columns.sql
+```
+
+Fresh installs get these columns automatically from `apps/web/d1/public-feed.sql`.

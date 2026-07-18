@@ -8,6 +8,16 @@ type FeedRow = {
   title: string;
   detail: string;
   tone: string;
+  updated_at: string;
+};
+
+type FeedItem = {
+  id: string;
+  state: string;
+  title: string;
+  detail: string;
+  tone: string;
+  updatedAt: string;
 };
 
 const WORKSPACE = "brysonbenjamin";
@@ -30,7 +40,7 @@ export async function onRequestGet(context: { env: Env }) {
   }
 
   const { results } = await context.env.PUBLIC_FEED_DB.prepare(
-    `SELECT id, state, title, detail, tone
+    `SELECT id, state, title, detail, tone, updated_at
       FROM public_feed_items
       WHERE workspace = ? AND is_public = 1
       ORDER BY sort_order ASC, updated_at DESC
@@ -39,9 +49,13 @@ export async function onRequestGet(context: { env: Env }) {
     .bind(WORKSPACE)
     .all<FeedRow>();
 
-  const items = (results ?? []).map((item) => ({
-    ...item,
-    tone: normalizeTone(item.tone)
+  const items: FeedItem[] = (results ?? []).map((item) => ({
+    id: item.id,
+    state: item.state,
+    title: item.title,
+    detail: item.detail,
+    tone: normalizeTone(item.tone),
+    updatedAt: item.updated_at
   }));
 
   return Response.json(
