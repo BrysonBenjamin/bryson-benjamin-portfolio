@@ -13,6 +13,7 @@ type LinearIssue = {
   completedAt: string | null;
   state: { name: string; type: string };
   attachments: { nodes: LinearAttachment[] };
+  parent: { identifier: string } | null;
 };
 
 type LinearIssuesResponse = {
@@ -122,6 +123,9 @@ async function fetchPublicIssues(config: SyncConfig): Promise<LinearIssue[]> {
               url
             }
           }
+          parent {
+            identifier
+          }
         }
       }
     }
@@ -172,6 +176,7 @@ function toDetail(description: string | null): string {
 
 async function upsertToD1(config: SyncConfig, issues: LinearIssue[]) {
   const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/d1/database/${config.cloudflareDatabaseId}/query`;
+  const activeIds = new Set(issues.map((issue) => issue.identifier));
 
   for (const [index, issue] of issues.entries()) {
     const detail = toDetail(issue.description);
@@ -180,6 +185,9 @@ async function upsertToD1(config: SyncConfig, issues: LinearIssue[]) {
       label: attachment.title,
       url: attachment.url
     }));
+    // Only keep the parent link if the parent is also in this run's gated
+    // set — otherwise it'd point at a page that doesn't exist publicly.
+    const parentId = issue.parent && activeIds.has(issue.parent.identifier) ? issue.parent.identifier : null;
 
     const response = await fetch(endpoint, {
       method: "POST",
@@ -189,8 +197,8 @@ async function upsertToD1(config: SyncConfig, issues: LinearIssue[]) {
       },
       body: JSON.stringify({
         sql: `INSERT INTO public_feed_items
-            (id, workspace, source, source_id, state, title, detail, body, links_json, tone, sort_order, is_public, updated_at)
-          VALUES (?, ?, 'linear', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+            (id, workspace, source, source_id, state, title, detail, body, links_json, tone, sort_order, is_public, parent_id, updated_at)
+          VALUES (?, ?, 'linear', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
           ON CONFLICT(id) DO UPDATE SET
             workspace = excluded.workspace,
             source = excluded.source,
@@ -203,6 +211,7 @@ async function upsertToD1(config: SyncConfig, issues: LinearIssue[]) {
             tone = excluded.tone,
             sort_order = excluded.sort_order,
             is_public = excluded.is_public,
+            parent_id = excluded.parent_id,
             updated_at = excluded.updated_at`,
         params: [
           issue.identifier,
@@ -215,6 +224,7 @@ async function upsertToD1(config: SyncConfig, issues: LinearIssue[]) {
           JSON.stringify(links),
           toneByStateType[issue.state.type] ?? "white",
           index,
+          parentId,
           issue.updatedAt
         ]
       })
