@@ -52,7 +52,7 @@ app.get("/api/profile", (context) =>
   context.json({
     name: "Bryson Benjamin",
     domain: "brysonbenjamin.com",
-    stack: ["Vite", "Bun", "Hono", "Drizzle", "Neon", "Cloudflare Pages", "Railway"]
+    stack: ["Vite", "Bun", "Hono", "Drizzle", "Neon", "Cloudflare Pages", "Render"]
   })
 );
 
@@ -96,4 +96,3 @@ Bun.serve({
   fetch: app.fetch,
   port
 });
-

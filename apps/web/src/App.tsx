@@ -52,7 +52,7 @@ const fallbackFeedItems: FeedItem[] = [
     id: "BB-01",
     state: "Seeded",
     title: "Lay the full-stack foundation",
-    detail: "Vite, Bun, Hono, Drizzle, Neon, Railway, and deployment rails.",
+    detail: "Vite, Bun, Hono, Drizzle, Neon, Render, and Cloudflare rails.",
     tone: "blue"
   }
 ];

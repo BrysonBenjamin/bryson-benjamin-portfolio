@@ -1,0 +1,33 @@
+# Render Blueprint for the backend API. The frontend stays on Cloudflare Pages.
+services:
+  - type: web
+    name: bryson-benjamin-api
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    autoDeploy: true
+    buildCommand: bun install --frozen-lockfile && bun run build:api
+    startCommand: bun run start:api
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - apps/api/**
+        - packages/db/**
+        - package.json
+        - bun.lock
+        - tsconfig.base.json
+        - render.yaml
+      ignoredPaths:
+        - apps/web/**
+        - README.md
+        - docs/**
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BUN_VERSION
+        value: "1.3.9"
+      - key: CORS_ORIGIN
+        value: https://brysonbenjamin.com,https://www.brysonbenjamin.com
+      - key: DATABASE_URL
+        sync: false

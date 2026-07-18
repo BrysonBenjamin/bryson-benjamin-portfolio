@@ -9,14 +9,14 @@ A full-stack portfolio workspace for [brysonbenjamin.com](https://brysonbenjamin
 - API: Hono on Bun
 - Database: Drizzle ORM with Neon Postgres
 - Frontend hosting: Cloudflare Pages
-- Backend hosting: Railway
+- Backend hosting: Render
 
 ## Workspace
 
 ```text
 apps/
   web/      Vite SPA for Cloudflare Pages
-  api/      Hono API for Railway
+  api/      Hono API for Render
 packages/
   db/       Drizzle schema, Neon client, migrations
 ```
@@ -66,9 +66,21 @@ Cloudflare Pages should build `apps/web` with:
 - Build output directory: `apps/web/dist`
 - Production env: `VITE_API_URL=https://api.brysonbenjamin.com`
 
-Railway should deploy the API from the repository root. The included `railway.json` starts `apps/api` with Bun and checks `/health`.
+Render should deploy the API from the repository root using the included `render.yaml` Blueprint.
+The Blueprint builds the shared database package, builds the API, starts `apps/api` with Bun, and checks `/health`.
+
+Blueprint deeplink:
+
+```text
+https://dashboard.render.com/blueprint/new?repo=https://github.com/BrysonBenjamin/bryson-benjamin-portfolio
+```
 
 Recommended production domains:
 
 - `brysonbenjamin.com` and `www.brysonbenjamin.com` for Cloudflare Pages
-- `api.brysonbenjamin.com` for Railway
+- `api.brysonbenjamin.com` for Render
+
+## Linear Sync Prep
+
+The first public feed is intentionally curated and database-backed. The next step is a predictable Linear sync that only mirrors explicitly public work into the site.
+See [docs/linear-sync.md](docs/linear-sync.md) for the proposed schedule, public gate, storage model, and env vars.

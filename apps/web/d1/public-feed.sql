@@ -79,7 +79,7 @@ INSERT INTO public_feed_items (
     NULL,
     'Seeded',
     'Lay the full-stack foundation',
-    'Vite, Bun, Hono, Drizzle, Neon, Railway, and deployment rails.',
+    'Vite, Bun, Hono, Drizzle, Neon, Render, and Cloudflare rails.',
     'blue',
     40,
     1,
