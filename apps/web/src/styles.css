@@ -278,6 +278,13 @@ h1 {
   padding: 16px;
 }
 
+.feed-empty {
+  margin: 0;
+  color: #74817b;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .feed-card {
   position: relative;
   min-height: 112px;
