@@ -58,6 +58,8 @@ bun run db:generate
 bun run db:migrate
 ```
 
+Both the Neon (Postgres) and D1 databases apply pending migrations automatically via GitHub Actions on push to `main`. See [docs/migrations.md](docs/migrations.md).
+
 ## Deployment Notes
 
 Cloudflare Pages should build `apps/web` with:
