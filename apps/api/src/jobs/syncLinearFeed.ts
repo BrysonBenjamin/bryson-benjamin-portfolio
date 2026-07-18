@@ -10,6 +10,7 @@ type LinearIssue = {
   title: string;
   description: string | null;
   updatedAt: string;
+  completedAt: string | null;
   state: { name: string; type: string };
   attachments: { nodes: LinearAttachment[] };
 };
@@ -28,6 +29,7 @@ type SyncConfig = {
   teamKeys: string[];
   publicLabels: string[];
   workspace: string;
+  completedGraceDays: number;
   cloudflareApiToken: string;
   cloudflareAccountId: string;
   cloudflareDatabaseId: string;
@@ -51,6 +53,7 @@ function readConfig(): SyncConfig | null {
     .map((label) => label.trim())
     .filter(Boolean);
   const workspace = Bun.env.PUBLIC_WORKSPACE_KEY ?? "brysonbenjamin";
+  const completedGraceDays = Number(Bun.env.LINEAR_COMPLETED_GRACE_DAYS ?? "7");
   const cloudflareApiToken = Bun.env.CLOUDFLARE_API_TOKEN;
   const cloudflareAccountId = Bun.env.CLOUDFLARE_ACCOUNT_ID;
   const cloudflareDatabaseId = Bun.env.CLOUDFLARE_D1_DATABASE_ID;
@@ -71,10 +74,24 @@ function readConfig(): SyncConfig | null {
     teamKeys,
     publicLabels,
     workspace,
+    completedGraceDays: Number.isFinite(completedGraceDays) ? completedGraceDays : 7,
     cloudflareApiToken,
     cloudflareAccountId,
     cloudflareDatabaseId
   };
+}
+
+function isWithinCompletedGrace(issue: LinearIssue, graceDays: number): boolean {
+  if (issue.state.type !== "completed") {
+    return true;
+  }
+
+  if (!issue.completedAt) {
+    return true;
+  }
+
+  const cutoff = Date.now() - graceDays * 24 * 60 * 60 * 1000;
+  return new Date(issue.completedAt).getTime() >= cutoff;
 }
 
 async function fetchPublicIssues(config: SyncConfig): Promise<LinearIssue[]> {
@@ -94,6 +111,7 @@ async function fetchPublicIssues(config: SyncConfig): Promise<LinearIssue[]> {
           title
           description
           updatedAt
+          completedAt
           state {
             name
             type
@@ -208,6 +226,67 @@ async function upsertToD1(config: SyncConfig, issues: LinearIssue[]) {
   }
 }
 
+async function pruneStaleRows(config: SyncConfig, currentIds: string[]) {
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/d1/database/${config.cloudflareDatabaseId}/query`;
+
+  const sql =
+    currentIds.length > 0
+      ? `DELETE FROM public_feed_items WHERE workspace = ? AND source = 'linear' AND id NOT IN (${currentIds.map(() => "?").join(", ")})`
+      : `DELETE FROM public_feed_items WHERE workspace = ? AND source = 'linear'`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.cloudflareApiToken}`
+    },
+    body: JSON.stringify({ sql, params: [config.workspace, ...currentIds] })
+  });
+
+  if (!response.ok) {
+    throw new Error(`linear feed sync: D1 prune failed with ${response.status}`);
+  }
+
+  const payload = (await response.json()) as { result?: { meta?: { changes?: number } }[] };
+  const removed = payload.result?.[0]?.meta?.changes ?? 0;
+
+  if (removed > 0) {
+    console.log(`linear feed sync: pruned ${removed} row(s) no longer public (unlabeled, canceled, deleted, or past the completed grace period)`);
+  }
+}
+
+// One-time cleanup of the hand-written seed rows that predate this sync job.
+// Safe to leave in permanently (deletes 0 rows once they're gone), but can be
+// removed in a follow-up once confirmed.
+const LEGACY_MANUAL_SEED_IDS = ["BB-01", "BB-02", "BB-03", "BB-04"];
+
+async function removeLegacyManualSeed(config: SyncConfig) {
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/d1/database/${config.cloudflareDatabaseId}/query`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.cloudflareApiToken}`
+    },
+    body: JSON.stringify({
+      sql: `DELETE FROM public_feed_items WHERE workspace = ? AND id IN (${LEGACY_MANUAL_SEED_IDS.map(() => "?").join(", ")})`,
+      params: [config.workspace, ...LEGACY_MANUAL_SEED_IDS]
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`linear feed sync: legacy seed cleanup failed with ${response.status}`);
+  }
+
+  const payload = (await response.json()) as { result?: { meta?: { changes?: number } }[] };
+  const removed = payload.result?.[0]?.meta?.changes ?? 0;
+
+  if (removed > 0) {
+    console.log(`linear feed sync: removed ${removed} legacy manual seed row(s) (BB-01..04)`);
+  }
+}
+
 async function main() {
   const config = readConfig();
 
@@ -216,10 +295,16 @@ async function main() {
     return;
   }
 
-  const issues = await fetchPublicIssues(config);
-  console.log(`linear feed sync: found ${issues.length} public-feed issue(s)`);
+  await removeLegacyManualSeed(config);
 
-  await upsertToD1(config, issues);
+  const fetchedIssues = await fetchPublicIssues(config);
+  const activeIssues = fetchedIssues.filter((issue) => isWithinCompletedGrace(issue, config.completedGraceDays));
+  console.log(
+    `linear feed sync: found ${fetchedIssues.length} public-feed issue(s), ${activeIssues.length} still within the completed grace period`
+  );
+
+  await upsertToD1(config, activeIssues);
+  await pruneStaleRows(config, activeIssues.map((issue) => issue.identifier));
   console.log("linear feed sync: done");
 }
 

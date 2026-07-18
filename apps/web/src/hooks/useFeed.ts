@@ -29,7 +29,7 @@ export function useFeed() {
         const data = (await response.json()) as FeedResponse;
         const publicItems = data.items.filter(isFeedItem);
 
-        if (isCurrent && data.workspace === "brysonbenjamin" && publicItems.length > 0) {
+        if (isCurrent && data.workspace === "brysonbenjamin") {
           setFeedItems(publicItems);
           setFeedSource("live");
         }

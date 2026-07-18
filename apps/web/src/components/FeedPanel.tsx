@@ -19,6 +19,13 @@ function FeedPanel() {
         </span>
       </div>
       <div className="feed-stack">
+        {feedItems.length === 0 && feedSource !== "loading" && (
+          <p className="feed-empty">
+            {feedSource === "live"
+              ? "No public tasks flagged yet — check back soon."
+              : "Feed temporarily unavailable."}
+          </p>
+        )}
         <AnimatePresence initial={false}>
           {feedItems.map((item) => (
             <motion.article
