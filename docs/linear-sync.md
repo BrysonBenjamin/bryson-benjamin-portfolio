@@ -21,6 +21,7 @@ Only sync issues that match all of these:
 - Team key is in `LINEAR_TEAM_KEYS`
 - Issue has a public label from `LINEAR_PUBLIC_LABELS`, defaulting to `public-feed`
 - Issue is not canceled
+- If the issue is completed, it's still within `LINEAR_COMPLETED_GRACE_DAYS` (default 7) of its `completedAt` — completed work stays visible as a "shipped" entry for a window, then ages out
 
 The sync maps Linear records into the public projection:
 
@@ -52,10 +53,13 @@ Render Cron Jobs would have been the natural home (this repo's backend already l
 The job:
 
 1. Reads `LINEAR_API_KEY`, `LINEAR_TEAM_KEYS`, `LINEAR_PUBLIC_LABELS` from env. If any required var (including the Cloudflare ones) is missing, it logs and exits 0 — a safe no-op, matching the existing convention on `apps/api`.
-2. Queries Linear for matching issues.
-3. Upserts each into `public_feed_items` by id. Old rows are left alone if a run fails partway.
+2. Queries Linear for matching issues (excluding canceled), then filters out completed issues that are past `LINEAR_COMPLETED_GRACE_DAYS`.
+3. Upserts each surviving issue into `public_feed_items` by id — this also picks up edits: a changed title, description, or attachment list on an already-synced issue overwrites the old row on the next run.
+4. Deletes any `source = 'linear'` row in D1 whose id isn't in that run's surviving set. This is what makes unlabeling, canceling, deleting, or aging out an issue actually remove it from the public site instead of leaving a stale row behind.
 
-The five-minute overlap / watermark logic from the original draft doesn't apply here since there's no incremental pull — every run re-fetches the full gated set, which is cheap at this scale.
+Steps 3 and 4 together make each run a full mirror of the current gate, not an append-only log — every run reconciles D1 to exactly match what's currently public in Linear. The five-minute overlap / watermark logic from the original draft doesn't apply here since there's no incremental pull — every run re-fetches the full gated set, which is cheap at this scale.
+
+If step 2 or step 3 throws (rate limit, network error, bad response), the run stops before step 4 runs — a failed fetch never wipes existing rows. The prune step only runs after a fully successful fetch and upsert.
 
 ## Rate Limits And Reliability
 
@@ -71,7 +75,7 @@ CLOUDFLARE_API_TOKEN=
 CLOUDFLARE_ACCOUNT_ID=
 ```
 
-`LINEAR_TEAM_KEYS`, `LINEAR_PUBLIC_LABELS`, `PUBLIC_WORKSPACE_KEY`, and `CLOUDFLARE_D1_DATABASE_ID` aren't secret and are set directly in the workflow file's `env:` block.
+`LINEAR_TEAM_KEYS`, `LINEAR_PUBLIC_LABELS`, `PUBLIC_WORKSPACE_KEY`, `LINEAR_COMPLETED_GRACE_DAYS`, and `CLOUDFLARE_D1_DATABASE_ID` aren't secret and are set directly in the workflow file's `env:` block.
 
 `CLOUDFLARE_API_TOKEN` needs D1 edit permission on the `brysonbenjamin-public` database (a Custom Token, scoped to `Account > D1 > Edit` on that one account — see the token creation notes for exact steps). Until `LINEAR_API_KEY` and the Cloudflare secrets are set, the workflow runs and no-ops harmlessly.
 
