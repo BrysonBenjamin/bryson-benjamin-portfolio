@@ -1,0 +1,20 @@
+{
+  "name": "@bryson-benjamin/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "build": "bun build src/index.ts --target bun --outdir dist",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@bryson-benjamin/db": "workspace:*",
+    "hono": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  }
+}
+
