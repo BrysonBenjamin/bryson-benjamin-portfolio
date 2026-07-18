@@ -255,6 +255,38 @@ async function pruneStaleRows(config: SyncConfig, currentIds: string[]) {
   }
 }
 
+// One-time cleanup of the hand-written seed rows that predate this sync job.
+// Safe to leave in permanently (deletes 0 rows once they're gone), but can be
+// removed in a follow-up once confirmed.
+const LEGACY_MANUAL_SEED_IDS = ["BB-01", "BB-02", "BB-03", "BB-04"];
+
+async function removeLegacyManualSeed(config: SyncConfig) {
+  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/d1/database/${config.cloudflareDatabaseId}/query`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.cloudflareApiToken}`
+    },
+    body: JSON.stringify({
+      sql: `DELETE FROM public_feed_items WHERE workspace = ? AND id IN (${LEGACY_MANUAL_SEED_IDS.map(() => "?").join(", ")})`,
+      params: [config.workspace, ...LEGACY_MANUAL_SEED_IDS]
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`linear feed sync: legacy seed cleanup failed with ${response.status}`);
+  }
+
+  const payload = (await response.json()) as { result?: { meta?: { changes?: number } }[] };
+  const removed = payload.result?.[0]?.meta?.changes ?? 0;
+
+  if (removed > 0) {
+    console.log(`linear feed sync: removed ${removed} legacy manual seed row(s) (BB-01..04)`);
+  }
+}
+
 async function main() {
   const config = readConfig();
 
@@ -262,6 +294,8 @@ async function main() {
     console.log("linear feed sync: missing LINEAR_API_KEY, LINEAR_TEAM_KEYS, or Cloudflare env vars, no-op");
     return;
   }
+
+  await removeLegacyManualSeed(config);
 
   const fetchedIssues = await fetchPublicIssues(config);
   const activeIssues = fetchedIssues.filter((issue) => isWithinCompletedGrace(issue, config.completedGraceDays));
