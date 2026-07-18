@@ -80,7 +80,7 @@ Recommended production domains:
 - `brysonbenjamin.com` and `www.brysonbenjamin.com` for Cloudflare Pages
 - `api.brysonbenjamin.com` for Render
 
-## Linear Sync Prep
+## Linear Sync
 
-The first public feed is intentionally curated and database-backed. The next step is a predictable Linear sync that only mirrors explicitly public work into the site.
-See [docs/linear-sync.md](docs/linear-sync.md) for the proposed schedule, public gate, storage model, and env vars.
+The public feed is database-backed and syncs daily from Linear via a Render Cron Job, mirroring only issues explicitly labeled `public-feed`.
+See [docs/linear-sync.md](docs/linear-sync.md) for the schedule, public gate, storage model, and required env vars.
