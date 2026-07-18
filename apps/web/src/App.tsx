@@ -1,19 +1,121 @@
+import { useEffect, useState } from "react";
 import { Code2, Cpu, Mail, Radio, TerminalSquare } from "lucide-react";
+import type { CSSProperties } from "react";
+
+type FeedTone = "mint" | "amber" | "white" | "blue";
+
+type FeedItem = {
+  id: string;
+  state: string;
+  title: string;
+  detail: string;
+  tone: FeedTone;
+};
+
+type FeedResponse = {
+  workspace: string;
+  items: unknown[];
+};
+
+type FeedSource = "loading" | "live" | "fallback";
+type FeedCardStyle = CSSProperties & { "--card-index": number };
 
 const statusItems = [
   { label: "Frontend", value: "Vite SPA online" },
   { label: "Runtime", value: "Bun + Hono warming" },
-  { label: "Storage", value: "Neon schema staged" }
+  { label: "Storage", value: "D1 public feed live" }
 ];
 
-const consoleLines = [
-  "$ systemctl start brysonbenjamin.com",
-  "loading interface primitives...",
-  "calibrating signal, memory, and craft...",
-  "status: under construction"
+const fallbackFeedItems: FeedItem[] = [
+  {
+    id: "BB-04",
+    state: "Live",
+    title: "Open the public build feed",
+    detail: "D1-backed workspace entries are serving through the Pages Function at /api/feed.",
+    tone: "mint"
+  },
+  {
+    id: "BB-03",
+    state: "In motion",
+    title: "Shape the public operating surface",
+    detail: "Navigation, archive model, and first durable page primitives.",
+    tone: "amber"
+  },
+  {
+    id: "BB-02",
+    state: "Shipped",
+    title: "Bring the construction page online",
+    detail: "Cloudflare Pages, apex domain, and early system status.",
+    tone: "white"
+  },
+  {
+    id: "BB-01",
+    state: "Seeded",
+    title: "Lay the full-stack foundation",
+    detail: "Vite, Bun, Hono, Drizzle, Neon, Railway, and deployment rails.",
+    tone: "blue"
+  }
 ];
+
+const feedToneSet = new Set<string>(["mint", "amber", "white", "blue"]);
+
+function isFeedTone(value: unknown): value is FeedTone {
+  return typeof value === "string" && feedToneSet.has(value);
+}
+
+function isFeedItem(value: unknown): value is FeedItem {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.state === "string" &&
+    typeof candidate.title === "string" &&
+    typeof candidate.detail === "string" &&
+    isFeedTone(candidate.tone)
+  );
+}
 
 function App() {
+  const [feedItems, setFeedItems] = useState<FeedItem[]>(fallbackFeedItems);
+  const [feedSource, setFeedSource] = useState<FeedSource>("loading");
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadFeed() {
+      try {
+        const response = await fetch("/api/feed", {
+          headers: { Accept: "application/json" }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Feed request failed with ${response.status}`);
+        }
+
+        const data = (await response.json()) as FeedResponse;
+        const publicItems = data.items.filter(isFeedItem);
+
+        if (isCurrent && data.workspace === "brysonbenjamin" && publicItems.length > 0) {
+          setFeedItems(publicItems);
+          setFeedSource("live");
+        }
+      } catch {
+        if (isCurrent) {
+          setFeedSource("fallback");
+        }
+      }
+    }
+
+    loadFeed();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
   return (
     <main className="construction-shell" aria-labelledby="page-title">
       <div className="ambient-grid" aria-hidden="true" />
@@ -43,19 +145,35 @@ function App() {
           </p>
         </div>
 
-        <aside className="console-panel" aria-label="Current system status">
-          <div className="console-topbar">
-            <div className="window-controls" aria-hidden="true">
-              <span />
-              <span />
-              <span />
+        <aside className="feed-panel" aria-label="Current build log">
+          <div className="feed-topbar">
+            <div>
+              <span className="feed-kicker">Linear feed</span>
+              <strong>System log</strong>
             </div>
-            <span>bootstrap.log</span>
+            <span className={`feed-sync feed-sync-${feedSource}`}>
+              {feedSource === "live" ? "db-live" : feedSource === "loading" ? "syncing" : "static-safe"}
+            </span>
           </div>
-          <div className="console-body">
-            {consoleLines.map((line) => (
-              <p key={line}>{line}</p>
+          <div className="feed-stack">
+            {feedItems.map((item, index) => (
+              <article
+                className={`feed-card tone-${item.tone}`}
+                key={item.id}
+                style={{ "--card-index": index } as FeedCardStyle}
+              >
+                <div className="feed-card-meta">
+                  <span>{item.id}</span>
+                  <span>{item.state}</span>
+                </div>
+                <h2>{item.title}</h2>
+                <p>{item.detail}</p>
+              </article>
             ))}
+          </div>
+          <div className="feed-footer">
+            <span>workspace brysonbenjamin</span>
+            <span>public mirror</span>
           </div>
         </aside>
       </section>
