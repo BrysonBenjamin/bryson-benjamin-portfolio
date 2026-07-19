@@ -27,9 +27,14 @@ export function useFeed() {
         }
 
         const data = (await response.json()) as FeedResponse;
+
+        if (data.workspace !== "brysonbenjamin") {
+          throw new Error(`Unexpected feed workspace: ${data.workspace}`);
+        }
+
         const publicItems = data.items.filter(isFeedItem);
 
-        if (isCurrent && data.workspace === "brysonbenjamin") {
+        if (isCurrent) {
           setFeedItems(publicItems);
           setFeedSource("live");
         }
