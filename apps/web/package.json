@@ -2,6 +2,7 @@
   "name": "@bryson-benjamin/web",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.3.11",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
