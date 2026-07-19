@@ -7,10 +7,12 @@
     "start": "bun src/index.ts",
     "build": "bun build src/index.ts --target bun --outdir dist",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "sync:linear": "bun src/jobs/syncLinearFeed.ts"
+    "sync:linear": "bun src/jobs/syncLinearFeed.ts",
+    "generate:openapi": "bun src/scripts/generateOpenApi.ts"
   },
   "dependencies": {
     "@bryson-benjamin/db": "workspace:*",
+    "@hono/zod-openapi": "latest",
     "hono": "latest",
     "zod": "latest"
   },
