@@ -7,7 +7,8 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "d1:migrate": "wrangler d1 migrations apply brysonbenjamin-public --remote"
+    "d1:migrate": "wrangler d1 migrations apply brysonbenjamin-public --remote",
+    "deploy": "wrangler pages deploy dist"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
