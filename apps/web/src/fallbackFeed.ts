@@ -6,7 +6,7 @@ export const fallbackFeedItems: FeedItem[] = [
     state: "Static",
     title: "Live feed is temporarily unavailable",
     detail: "The Linear-synced feed couldn't be reached from here. Check back shortly — this page is otherwise live.",
-    tone: "amber"
+    tone: "blue"
   }
 ];
 
