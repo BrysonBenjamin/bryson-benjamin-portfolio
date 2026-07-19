@@ -62,7 +62,9 @@ Both the Neon (Postgres) and D1 databases apply pending migrations automatically
 
 ## Deployment Notes
 
-`apps/web` deploys via `.github/workflows/deploy-pages.yml`: builds the SPA and runs `wrangler pages deploy` on every push to `main` (production) and on every PR (a branch preview, findable in the Cloudflare Pages dashboard's Deployments tab or at a predictable `<branch-slug>.bryson-benjamin-portfolio.pages.dev` URL). This is deliberately CI-driven rather than Cloudflare's dashboard-only GitHub App connection — the Pages project isn't (and doesn't need to be) connected to GitHub natively. Requires `CLOUDFLARE_PAGES_API_TOKEN` (scoped to `Account > Cloudflare Pages > Edit`) and `CLOUDFLARE_ACCOUNT_ID` as GitHub Actions secrets.
+`apps/web` deploys via Cloudflare Pages' native GitHub integration: connected directly to this repo, building automatically on every push to `main` (production) and posting a preview URL on every PR. Build settings live in the Cloudflare Pages dashboard (Settings → Builds & deployments), not in this repo — confirm the build command builds `apps/web` specifically (e.g. `bun install --frozen-lockfile && bun run --cwd apps/web build`) and the output/root directory account for the monorepo layout.
+
+For a one-off manual deploy without waiting on Cloudflare's build, `bun run --cwd apps/web deploy` runs `wrangler pages deploy dist` against a local build.
 
 Render should deploy the API from the repository root using the included `render.yaml` Blueprint.
 The Blueprint builds the shared database package, builds the API, starts `apps/api` with Bun, and checks `/health`.
