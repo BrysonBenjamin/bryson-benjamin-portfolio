@@ -62,11 +62,9 @@ Both the Neon (Postgres) and D1 databases apply pending migrations automatically
 
 ## Deployment Notes
 
-Cloudflare Pages should build `apps/web` with:
+`apps/web` deploys via Cloudflare Pages' native GitHub integration: connected directly to this repo, building automatically on every push to `main` (production) and posting a preview URL on every PR. Build settings live in the Cloudflare Pages dashboard (Settings → Builds & deployments), not in this repo — confirm the build command builds `apps/web` specifically (e.g. `bun install --frozen-lockfile && bun run --cwd apps/web build`) and the output/root directory account for the monorepo layout.
 
-- Build command: `bun install --frozen-lockfile && bun run --cwd apps/web build`
-- Build output directory: `apps/web/dist`
-- Production env: `VITE_API_URL=https://api.brysonbenjamin.com`
+For a one-off manual deploy without waiting on Cloudflare's build, `bun run --cwd apps/web deploy` runs `wrangler pages deploy dist` against a local build.
 
 Render should deploy the API from the repository root using the included `render.yaml` Blueprint.
 The Blueprint builds the shared database package, builds the API, starts `apps/api` with Bun, and checks `/health`.
