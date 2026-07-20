@@ -25,8 +25,17 @@ Run it locally with `bun run docs:prepare-sync`; it writes `docs-sync-payload.js
 
 `docs-bryson-benjamin/.github/workflows/receive-guides.yml` listens for that dispatch, writes each file under `content/docs/guides/`, and commits straight to `main` if anything changed — no PR gate, matching every other automated pipeline in this system (migrations, the Linear feed sync, the OpenAPI sync). Cloudflare Pages' native Git integration then rebuilds and deploys the docs site from that commit like any other push.
 
+## Mermaid diagrams
+
+`docs-bryson-benjamin` doesn't render Mermaid out of the box — Fumadocs recommends wiring it up yourself rather than shipping a built-in wrapper. Three pieces make it work there:
+
+- `remarkMdxMermaid` from `fumadocs-core/mdx-plugins` (already available, no extra package) is registered in `source.config.ts`'s `mdxOptions.remarkPlugins`, converting ` ```mermaid ` fences into `<Mermaid chart="...">` calls at MDX-compile time.
+- `mermaid` and `next-themes` are installed as real dependencies — `lib/mermaid.tsx` is a client component that dynamically imports `mermaid` and calls `mermaid.render()` in the browser, theming it off `next-themes`' `resolvedTheme` (already available app-wide via `RootProvider`).
+- `Mermaid` is registered in the MDX components map passed to `<MDXContent>` in `app/docs/[[...slug]]/page.tsx`, alongside `OpenAPIPage`.
+
+Rendering is client-side only: `next build`'s static export prerenders the raw chart text in a `<pre>` fallback (mermaid.js needs a real browser, there's no server-side rendering path for it here), and the actual SVG replaces that fallback after hydration. Verified with a real headless-browser check against the static output, not just a successful build — the SVG renders and the fallback disappears once the page loads.
+
 ## Known gaps
 
 - **No pruning.** Renaming or deleting a `docs/*.md` file doesn't remove its old counterpart from `content/docs/guides/` — the receiving workflow only ever writes, it never diffs against what should no longer exist. Fine at four files; worth revisiting if churn picks up.
-- **Mermaid diagrams render as plain code blocks.** `docs-bryson-benjamin` has no Mermaid rendering wired into its MDX pipeline, so the diagram in `docs/architecture.md` shows as an unrendered fenced code block on the live site today.
 - **`content/docs/guides/meta.json` isn't managed by this pipeline.** Fumadocs' default page ordering applies; if a specific guide order is ever wanted, that file needs a manually-maintained `pages` array.
