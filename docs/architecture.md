@@ -96,7 +96,7 @@ These pipelines carry data across otherwise-isolated surfaces. All are GitHub Ac
 
 ### docs/ → docs-bryson-benjamin (guides sync)
 
-`docs-sync.yml` triggers on push to `main` when `docs/**` changes. It converts every `docs/*.md` file to Fumadocs-shaped `.mdx` (frontmatter title/description, cross-doc links rewritten) and fires a `repository_dispatch` (`event_type: guides-sync`) at `docs-bryson-benjamin`, which writes the files under `content/docs/guides/` and commits straight to `main`. Full mechanics, including what the conversion does and its known gaps (no pruning of removed docs, Mermaid diagrams render unrendered), are in [`docs/docs-sync.md`](./docs-sync.md).
+`docs-sync.yml` triggers on push to `main` when `docs/**` changes. It converts every `docs/*.md` file to Fumadocs-shaped `.mdx` (frontmatter title/description, cross-doc links rewritten) and fires a `repository_dispatch` (`event_type: guides-sync`) at `docs-bryson-benjamin`, which writes the files under `content/docs/guides/` and commits straight to `main`. Full mechanics, including what the conversion does, how Mermaid diagrams render there, and known gaps (no pruning of removed docs), are in [`docs/docs-sync.md`](./docs-sync.md).
 
 ### Contact form (documented, not yet wired)
 
