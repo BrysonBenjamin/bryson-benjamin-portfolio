@@ -1,6 +1,6 @@
 # System Architecture
 
-A map of every deployment surface in the portfolio system, how they talk to each other, and why the boundaries sit where they do. This is the whole-system counterpart to [`docs/linear-sync.md`](./linear-sync.md), [`docs/migrations.md`](./migrations.md), and [`docs/docs-sync.md`](./docs-sync.md), which go deep on three of the cross-surface flows described here, and [`docs/stack.md`](./stack.md), which covers why each technology in this map was chosen.
+A map of every deployment surface in the portfolio system, how they talk to each other, and why the boundaries sit where they do. This is the whole-system counterpart to [`docs/linear-sync.md`](./linear-sync.md), [`docs/migrations.md`](./migrations.md), and [`docs/docs-sync.md`](./docs-sync.md), which go deep on three of the cross-surface flows described here; [`docs/stack.md`](./stack.md), which covers why each technology in this map was chosen; and [`docs/docs-site-deployment.md`](./docs-site-deployment.md), which covers how `docs-bryson-benjamin` itself builds and ships.
 
 ## Principle
 
