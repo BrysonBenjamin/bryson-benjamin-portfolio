@@ -5,6 +5,7 @@ node_modules/
 dist/
 .vite/
 apps/api/openapi.json
+docs-sync-payload.json
 
 # Environment
 .env

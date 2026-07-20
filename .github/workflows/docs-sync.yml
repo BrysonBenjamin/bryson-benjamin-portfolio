@@ -1,0 +1,42 @@
+name: Docs sync
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+  workflow_dispatch:
+
+jobs:
+  prepare-and-dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Prepare docs payload
+        run: bun run docs:prepare-sync
+
+      - name: Dispatch guides to docs repo
+        env:
+          DOCS_REPO_DISPATCH_TOKEN: ${{ secrets.DOCS_REPO_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg source_sha "${{ github.sha }}" \
+            --slurpfile payload docs-sync-payload.json \
+            '{event_type: "guides-sync", client_payload: ($payload[0] + {source_sha: $source_sha})}' \
+            > /tmp/dispatch-payload.json
+
+          curl -fsSL -X POST \
+            -H "Authorization: Bearer ${DOCS_REPO_DISPATCH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/brysonbenjamin/docs-bryson-benjamin/dispatches \
+            -d @/tmp/dispatch-payload.json

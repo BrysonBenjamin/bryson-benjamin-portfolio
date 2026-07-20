@@ -17,7 +17,8 @@
     "typecheck": "bun run --cwd packages/db typecheck && bun run --cwd apps/api typecheck && bun run --cwd apps/web typecheck",
     "db:generate": "bun run --cwd packages/db db:generate",
     "db:migrate": "bun run --cwd packages/db db:migrate",
-    "db:studio": "bun run --cwd packages/db db:studio"
+    "db:studio": "bun run --cwd packages/db db:studio",
+    "docs:prepare-sync": "bun scripts/prepareDocsSync.ts"
   },
   "devDependencies": {
     "@types/node": "latest",

@@ -1,6 +1,6 @@
 # System Architecture
 
-A map of every deployment surface in the portfolio system, how they talk to each other, and why the boundaries sit where they do. This is the whole-system counterpart to [`docs/linear-sync.md`](./linear-sync.md) and [`docs/migrations.md`](./migrations.md), which go deep on two of the cross-surface flows described here.
+A map of every deployment surface in the portfolio system, how they talk to each other, and why the boundaries sit where they do. This is the whole-system counterpart to [`docs/linear-sync.md`](./linear-sync.md), [`docs/migrations.md`](./migrations.md), and [`docs/docs-sync.md`](./docs-sync.md), which go deep on three of the cross-surface flows described here, and [`docs/stack.md`](./stack.md), which covers why each technology in this map was chosen.
 
 ## Principle
 
@@ -84,7 +84,7 @@ A Fumadocs/Next.js static site at `docs.brysonbenjamin.com`, its own Cloudflare 
 
 ## Cross-surface data flows
 
-Three pipelines carry data across these otherwise-isolated surfaces. All three are GitHub Actions, all three are one-directional, and all three are documented as "fail loud, don't half-apply" — see each workflow for specifics.
+These pipelines carry data across otherwise-isolated surfaces. All are GitHub Actions, all are one-directional, and all are documented as "fail loud, don't half-apply" — see each workflow for specifics.
 
 ### Linear → D1 (public feed sync)
 
@@ -93,6 +93,10 @@ Three pipelines carry data across these otherwise-isolated surfaces. All three a
 ### apps/api → docs-bryson-benjamin (OpenAPI dispatch)
 
 `openapi-sync.yml` triggers on push to `main` when `apps/api/src/**` changes. It generates `apps/api/openapi.json` from the live Hono/Zod route definitions, then fires a `repository_dispatch` (`event_type: openapi-sync`) at `docs-bryson-benjamin`, carrying the spec as the payload. That's how the docs site's generated API reference stays current without the two repos sharing code or a CI pipeline — per the [content architecture decided in BRY-19](https://linear.app/brysonbenjamin/issue/BRY-19), the generated reference is never committed to git in either repo; it's rebuilt at docs-site build time from whatever spec the last dispatch delivered.
+
+### docs/ → docs-bryson-benjamin (guides sync)
+
+`docs-sync.yml` triggers on push to `main` when `docs/**` changes. It converts every `docs/*.md` file to Fumadocs-shaped `.mdx` (frontmatter title/description, cross-doc links rewritten) and fires a `repository_dispatch` (`event_type: guides-sync`) at `docs-bryson-benjamin`, which writes the files under `content/docs/guides/` and commits straight to `main`. Full mechanics, including what the conversion does and its known gaps (no pruning of removed docs, Mermaid diagrams render unrendered), are in [`docs/docs-sync.md`](./docs-sync.md).
 
 ### Contact form (documented, not yet wired)
 
@@ -104,6 +108,6 @@ Three pipelines carry data across these otherwise-isolated surfaces. All three a
 
 ## Where this document lives
 
-This file is the working copy, kept in `docs/` alongside the two flow-specific docs it references. Long-term home is still an open question tracked in [BRY-20](https://linear.app/brysonbenjamin/issue/BRY-20): stay here, or move into `docs-bryson-benjamin`'s `content/docs/guides/` as hand-authored content per BRY-19's content model.
+This file is the working copy, kept in `docs/` alongside the flow-specific docs it references. It's also the source of truth: `docs-sync.yml` forwards it (and every other `docs/*.md` file) to `docs-bryson-benjamin/content/docs/guides/` on every push to `main`, per [`docs/docs-sync.md`](./docs-sync.md). Editing the copy that lands in `docs-bryson-benjamin` directly would be overwritten on the next sync — this file is the one to edit.
 
-Unlike the OpenAPI spec, there is currently no `repository_dispatch` (or any other automated pipe) that forwards guide-style Markdown into `docs-bryson-benjamin` — BRY-19 established that guides are hand-authored and committed directly in that repo, not generated. So "forwarding" this doc today means manually copying it into `docs-bryson-benjamin/content/docs/guides/` once that repo's content structure is ready to receive it, not an automated sync. If that manual step turns out to be a recurring pain, building a guides-forwarding workflow analogous to `openapi-sync.yml` would be the natural follow-up — not scoped here.
+This supersedes the earlier plan (from BRY-19) of guides being hand-authored directly in `docs-bryson-benjamin`: for this repo's own `docs/`, generation turned out to be worth it for the same reason it was for the OpenAPI spec — one source, no drift. BRY-19's model still holds for content that has no natural home in this repo (decisions/ADRs, narrative-only pages).
