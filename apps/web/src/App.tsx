@@ -3,6 +3,9 @@ import { Route, Routes, useLocation } from "react-router-dom";
 import TaskOverlay from "./components/TaskOverlay";
 import { SiteFooter } from "./components/layout/SiteFooter";
 import { SiteHeader } from "./components/layout/SiteHeader";
+import { SaSaActor } from "./features/sa-sa/SaSaActor";
+import { SaSaProvider } from "./features/sa-sa/SaSaProvider";
+import { SaSaSceneProvider } from "./features/sa-sa/SaSaSceneProvider";
 import HomePage from "./pages/HomePage";
 import TaskPage from "./pages/TaskPage";
 
@@ -12,24 +15,29 @@ function App() {
   const background = state?.background;
 
   return (
-    <div className="portfolio-shell">
-      <SiteHeader />
+    <SaSaProvider>
+      <SaSaSceneProvider>
+        <div className="portfolio-shell">
+          <SiteHeader />
 
-      <main aria-label="Bryson Benjamin portfolio">
-        <Routes location={background ?? location}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/log/:id" element={<TaskPage />} />
-        </Routes>
-      </main>
+          <main aria-label="Bryson Benjamin portfolio">
+            <Routes location={background ?? location}>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/log/:id" element={<TaskPage />} />
+            </Routes>
+          </main>
 
-      {background && (
-        <Routes>
-          <Route path="/log/:id" element={<TaskOverlay />} />
-        </Routes>
-      )}
+          {background && (
+            <Routes>
+              <Route path="/log/:id" element={<TaskOverlay />} />
+            </Routes>
+          )}
 
-      <SiteFooter />
-    </div>
+          <SiteFooter />
+          <SaSaActor hidden={Boolean(background)} />
+        </div>
+      </SaSaSceneProvider>
+    </SaSaProvider>
   );
 }
 

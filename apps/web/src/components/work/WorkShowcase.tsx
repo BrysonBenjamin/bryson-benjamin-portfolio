@@ -5,7 +5,7 @@ import { Card } from "../ui/Card";
 import { Tag } from "../ui/Tag";
 
 type WorkShowcaseProps = {
-  projects: Project[];
+  projects: readonly Project[];
 };
 
 const proofPoints = [

@@ -84,3 +84,7 @@ Recommended production domains:
 
 The public feed is database-backed and syncs daily from Linear via a GitHub Actions workflow, mirroring only issues explicitly labeled `public-feed`.
 See [docs/linear-sync.md](docs/linear-sync.md) for the schedule, public gate, storage model, and required env vars.
+
+## Sa-Sa framework
+
+The delivery contract, character guide, rendering decision, safety policy, architecture ADR, asset workflow, [page-author guide](docs/sa-sa/page-author-guide.md), and [agent gateway runbook](docs/sa-sa/agent-runbook.md) live in [docs/sa-sa](docs/sa-sa/). The web build validates the 100×100 Sa-Sa asset pack before bundling.

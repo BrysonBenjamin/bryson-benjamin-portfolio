@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { ArrowRight, CircleCheck, ExternalLink, GitBranch, Mail } from "lucide-react";
 import { Mascot } from "../components/brand/Mascot";
 import { RiverBuildLog } from "../components/feed/RiverBuildLog";
@@ -6,10 +7,68 @@ import { Section } from "../components/layout/Section";
 import { Card } from "../components/ui/Card";
 import { WorkShowcase } from "../components/work/WorkShowcase";
 import { posts, projects, statusNotes } from "../content/home";
+import {
+  SaSaScene,
+  useSaSaAnchor,
+  useSaSaPageAction,
+  useSaSaSectionScene,
+  useSaSaSafeZone
+} from "../features/sa-sa/SaSaSceneProvider";
+
+const homeScene = {
+  id: "home",
+  priority: 10,
+  anchors: [
+    { id: "home-hero", placement: "inline-end", availability: "all" },
+    { id: "home-work", placement: "block-end", availability: "desktop" }
+  ],
+  safeZones: [{ id: "home-primary-actions" }],
+  content: [
+    { type: "section", id: "work" },
+    { type: "section", id: "about" }
+  ],
+  actions: [
+    { id: "scroll-to-work", label: "Show selected work" },
+    { id: "scroll-to-about", label: "Show about" }
+  ]
+} as const;
+
+const writingScene = {
+  id: "home-writing",
+  priority: 15,
+  anchors: [{ id: "home-writing", placement: "inline-start", availability: "desktop" }],
+  safeZones: [{ id: "home-writing-posts" }],
+  content: [{ type: "document", id: "portfolio-writing" }],
+  actions: [{ id: "scroll-to-about", label: "Show about" }]
+} as const;
 
 function HomePage() {
+  const heroAnchorRef = useSaSaAnchor("home-hero");
+  const workAnchorRef = useSaSaAnchor("home-work");
+  const primaryActionsRef = useSaSaSafeZone("home-primary-actions");
+  const writingAnchorRef = useSaSaAnchor("home-writing");
+  const writingPostsRef = useSaSaSafeZone("home-writing-posts");
+  const writingSceneRef = useSaSaSectionScene(writingScene);
+  const writingRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      writingAnchorRef(element);
+      writingSceneRef(element);
+    },
+    [writingAnchorRef, writingSceneRef]
+  );
+  const scrollToSection = useCallback((id: string) => {
+    document.getElementById(id)?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "start"
+    });
+  }, []);
+
+  useSaSaPageAction("scroll-to-work", () => scrollToSection("work"));
+  useSaSaPageAction("scroll-to-about", () => scrollToSection("about"));
+
   return (
     <>
+      <SaSaScene scene={homeScene} />
       <Section className="hero-section">
         <AsymmetricSection className="hero-layout" variant="hero">
           <div className="hero-copy">
@@ -19,7 +78,7 @@ function HomePage() {
               From the roadmap to the last commit, I like small tools, honest changelogs,
               and systems that make the messy middle easier to see.
             </p>
-            <div className="hero-actions">
+            <div className="hero-actions" ref={primaryActionsRef}>
               <a className="bb-button bb-button--lg bb-button--primary" href="#work">
                 See the work
                 <ArrowRight size={18} aria-hidden="true" />
@@ -31,7 +90,7 @@ function HomePage() {
             </div>
           </div>
 
-          <div className="hero-mascot" aria-label="Bryson Benjamin mascot">
+          <div className="hero-mascot" aria-label="Bryson Benjamin mascot" ref={heroAnchorRef}>
             <Mascot hop size={164} speech="WELCOME!" />
             <div className="hero-mascot__ground" aria-hidden="true" />
           </div>
@@ -53,7 +112,7 @@ function HomePage() {
       </Section>
 
       <Section className="work-section" eyebrow="Selected work" id="work">
-        <div className="section-heading">
+        <div className="section-heading" ref={workAnchorRef}>
           <h2>Systems with receipts.</h2>
           <p>Recent work that pairs product thinking with working software.</p>
         </div>
@@ -64,12 +123,12 @@ function HomePage() {
       <RiverBuildLog />
 
       <Section className="writing-section" eyebrow="Writing" id="writing">
-        <div className="section-heading">
+        <div className="section-heading" ref={writingRef}>
           <h2>Notes from the bench.</h2>
           <p>Short pieces on product systems, documentation, and shipping in public.</p>
         </div>
 
-        <div className="post-list">
+        <div className="post-list" ref={writingPostsRef}>
           {posts.map((post) => (
             <a className="post-link" href="/" key={post.title} onClick={(event) => event.preventDefault()}>
               <span className="post-link__title">{post.title}</span>
