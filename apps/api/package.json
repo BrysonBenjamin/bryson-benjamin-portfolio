@@ -7,17 +7,20 @@
     "start": "bun src/index.ts",
     "build": "bun build src/index.ts --target bun --outdir dist",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
     "sync:linear": "bun src/jobs/syncLinearFeed.ts",
     "generate:openapi": "bun src/scripts/generateOpenApi.ts"
   },
   "dependencies": {
     "@bryson-benjamin/db": "workspace:*",
+    "@bryson-benjamin/portfolio-content": "workspace:*",
+    "@bryson-benjamin/sa-sa-contracts": "workspace:*",
     "@hono/zod-openapi": "latest",
     "hono": "latest",
     "zod": "latest"
   },
   "devDependencies": {
-    "bun-types": "latest"
+    "bun-types": "latest",
+    "vitest": "^4.1.10"
   }
 }
-

@@ -1,13 +1,23 @@
 import { contactMessages, createDb } from "@bryson-benjamin/db";
+import { parseSaSaTurnRequest } from "@bryson-benjamin/sa-sa-contracts";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
+import { streamSSE } from "hono/streaming";
+import { createSaSaAgentGateway } from "./sa-sa/agent";
 
 const databaseUrl = Bun.env.DATABASE_URL;
 const db = databaseUrl ? createDb(databaseUrl) : null;
-const allowedOrigins = (Bun.env.CORS_ORIGIN ?? "http://localhost:5173,https://brysonbenjamin.com")
+const allowedOrigins = (Bun.env.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173,https://brysonbenjamin.com")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const saSaAgent = createSaSaAgentGateway({
+  mode: Bun.env.SA_SA_AGENT_MODE === "disabled" ? "disabled" : "deterministic"
+});
+
+function hasAllowedOrigin(origin: string | undefined) {
+  return !origin || allowedOrigins.includes(origin);
+}
 
 const contactSchema = z.object({
   name: z.string().trim().min(2).max(100).openapi({ example: "Ada Lovelace" }),
@@ -206,6 +216,50 @@ app.openapi(contactRoute, async (context) => {
     },
     201
   );
+});
+
+app.post("/api/sa-sa/session", (context) => {
+  if (!hasAllowedOrigin(context.req.header("origin"))) {
+    return context.json({ error: "Origin is not allowed." }, 403);
+  }
+
+  return context.json(saSaAgent.createSession(), 201);
+});
+
+app.delete("/api/sa-sa/session/:sessionId", (context) => {
+  if (!hasAllowedOrigin(context.req.header("origin"))) {
+    return context.json({ error: "Origin is not allowed." }, 403);
+  }
+
+  saSaAgent.clearSession(context.req.param("sessionId"));
+  return context.body(null, 204);
+});
+
+app.post("/api/sa-sa/turn", async (context) => {
+  if (!hasAllowedOrigin(context.req.header("origin"))) {
+    return context.json({ error: "Origin is not allowed." }, 403);
+  }
+
+  const contentLength = Number(context.req.header("content-length") ?? "0");
+  if (!Number.isFinite(contentLength) || contentLength > 16_000) {
+    return context.json({ error: "Request is too large." }, 413);
+  }
+
+  const body = await context.req.json().catch(() => null);
+  const parsed = parseSaSaTurnRequest(body);
+  if (!parsed.success) {
+    return context.json({ error: "Invalid Sa-Sa turn request.", issues: parsed.issues }, 400);
+  }
+
+  return streamSSE(context, async (stream) => {
+    for await (const event of saSaAgent.streamTurn(parsed.data, context.req.raw.signal)) {
+      await stream.writeSSE({
+        event: "sa-sa",
+        id: String(event.sequence),
+        data: JSON.stringify(event)
+      });
+    }
+  });
 });
 
 app.doc("/openapi.json", {

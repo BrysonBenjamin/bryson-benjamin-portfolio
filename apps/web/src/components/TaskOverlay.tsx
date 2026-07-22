@@ -2,12 +2,23 @@ import { useEffect } from "react";
 import { X } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useFeedItem } from "../hooks/useFeedItem";
+import { SaSaScene, useSaSaPageAction, useSaSaSafeZone } from "../features/sa-sa/SaSaSceneProvider";
 import TaskDetail from "./TaskDetail";
 
 function TaskOverlay() {
   const { id } = useParams<{ id: string }>();
   const { item, status } = useFeedItem(id);
   const navigate = useNavigate();
+  const panelRef = useSaSaSafeZone("task-overlay-panel");
+  useSaSaPageAction("close-task-overlay", () => navigate(-1));
+  const scene = {
+    id: "task-overlay",
+    priority: 100,
+    anchors: [],
+    safeZones: [{ id: "task-overlay-panel" }],
+    content: id ? [{ type: "feed-item" as const, id }] : [],
+    actions: [{ id: "close-task-overlay", label: "Close task detail" }]
+  } as const;
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -22,8 +33,10 @@ function TaskOverlay() {
 
   return (
     <div className="task-overlay-backdrop" onClick={() => navigate(-1)}>
+      <SaSaScene scene={scene} />
       <div
         className="task-overlay-panel"
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={item?.title ?? "Task detail"}
