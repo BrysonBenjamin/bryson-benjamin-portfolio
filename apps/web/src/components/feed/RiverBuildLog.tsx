@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { ArrowRight } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import type { Location } from "react-router-dom";
 import { ScrollStage } from "../motion/ScrollStage";
 import {
   advanceAcceleratedSideScroll,
@@ -9,6 +11,14 @@ import {
 import { Mascot } from "../brand/Mascot";
 import { useFeed } from "../../hooks/useFeed";
 import type { FeedItem, FeedTone } from "../../types";
+
+type FeedFilter = "all" | "progress" | "done";
+
+const FILTERS: { key: FeedFilter; label: string; tone: FeedTone | "all" }[] = [
+  { key: "all", label: "All", tone: "all" },
+  { key: "progress", label: "In progress", tone: "amber" },
+  { key: "done", label: "Complete", tone: "mint" }
+];
 
 type RiverRaftStyle = CSSProperties & {
   "--raft-bob": string;
@@ -101,15 +111,13 @@ function RaftButton({
   flow,
   index,
   item,
-  onSelect,
-  selected,
+  location,
   time
 }: {
   flow: number;
   index: number;
   item: FeedItem;
-  onSelect: (item: FeedItem) => void;
-  selected: boolean;
+  location: Location;
   time: number;
 }) {
   const position = getRaftPosition(index, flow, time);
@@ -123,12 +131,12 @@ function RaftButton({
   } as RiverRaftStyle;
 
   return (
-    <button
-      aria-pressed={selected}
+    <Link
+      aria-label={`Open details for ${item.title}`}
       className={`river-raft river-raft--${item.tone}`}
-      onClick={() => onSelect(item)}
+      state={{ background: location }}
       style={style}
-      type="button"
+      to={`/log/${item.id}`}
     >
       <span className="river-raft__wake" aria-hidden="true" />
       <span className="river-raft__planks" aria-hidden="true">
@@ -144,18 +152,32 @@ function RaftButton({
         <strong>{item.title}</strong>
         <span>{item.detail}</span>
       </span>
-    </button>
+    </Link>
   );
 }
 
 export function RiverBuildLog() {
   const { feedItems, feedSource } = useFeed();
+  const location = useLocation();
   const sideScrollRef = useRef(createAcceleratedSideScrollState());
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selectedItem = useMemo(
-    () => feedItems.find((item) => item.id === selectedId) ?? null,
-    [feedItems, selectedId]
+  const [filter, setFilter] = useState<FeedFilter>("all");
+
+  const counts = useMemo(
+    () => ({
+      all: feedItems.length,
+      progress: feedItems.filter((item) => item.tone === "amber").length,
+      done: feedItems.filter((item) => item.tone === "mint").length
+    }),
+    [feedItems]
   );
+
+  const filteredItems = useMemo(() => {
+    if (filter === "all") {
+      return feedItems;
+    }
+    const tone = filter === "progress" ? "amber" : "mint";
+    return feedItems.filter((item) => item.tone === tone);
+  }, [feedItems, filter]);
 
   return (
     <section aria-labelledby="build-log-title" className="river-log-section" id="build-log">
@@ -172,9 +194,9 @@ export function RiverBuildLog() {
             velocityImpulseScale: 0.36
           });
           const flow = sideScroll.offset;
-          const dockProgress = selectedItem ? 1 : Math.min(1, Math.max(0, (progress - 0.58) / 0.22));
-          const dockItem = selectedItem ?? feedItems[0];
-          const showDock = Boolean(dockItem && (selectedItem || progress > 0.5));
+          const dockProgress = Math.min(1, Math.max(0, (progress - 0.58) / 0.22));
+          const dockItem = filteredItems[0] ?? null;
+          const showDock = Boolean(dockItem && progress > 0.5);
           const sceneStyle = {
             "--dock-opacity": dockProgress.toFixed(3),
             "--dock-y": `${((1 - dockProgress) * 28).toFixed(1)}px`,
@@ -218,9 +240,30 @@ export function RiverBuildLog() {
                 <p className="feed-kicker">Public build log</p>
                 <h2 id="build-log-title">The work log floats through the site.</h2>
                 <p>
-                  Each raft is a public Linear entry. The river keeps it moving, but the dock
-                  keeps the details readable.
+                  Each raft is a public Linear entry. Click one to open the full task — the
+                  river keeps it moving, but the dock keeps a preview readable.
                 </p>
+                <div className="feed-filter" role="tablist" aria-label="Filter build log by status">
+                  {FILTERS.map((option) => {
+                    const isActive = filter === option.key;
+                    return (
+                      <button
+                        aria-selected={isActive}
+                        className={`feed-filter-tab${isActive ? " is-active" : ""}`}
+                        key={option.key}
+                        onClick={() => setFilter(option.key)}
+                        role="tab"
+                        type="button"
+                      >
+                        <span className="feed-filter-tab-label">
+                          <span aria-hidden="true" className="feed-filter-dot" data-tone={option.tone} />
+                          {option.label}
+                          <span className="feed-filter-count">{counts[option.key]}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="river-log-label__status">
                   <span className={`feed-sync feed-sync--${feedSource}`}>{getSourceLabel(feedSource)}</span>
                   <span>{Math.round(progress * 100)}% downstream</span>
@@ -231,14 +274,18 @@ export function RiverBuildLog() {
               </div>
 
               <div className="river-raft-field" aria-label="Public build-log rafts">
-                {feedItems.map((item, index) => (
+                {filteredItems.length === 0 ? (
+                  <p className="feed-empty">
+                    No {filter === "progress" ? "in-progress" : "completed"} entries right now.
+                  </p>
+                ) : null}
+                {filteredItems.map((item, index) => (
                   <RaftButton
                     flow={flow}
                     index={index}
                     item={item}
                     key={item.id}
-                    onSelect={(nextItem) => setSelectedId(nextItem.id)}
-                    selected={selectedItem?.id === item.id}
+                    location={location}
                     time={active ? time : time * 0.6}
                   />
                 ))}
