@@ -27,7 +27,7 @@ jobs:
           LINEAR_TEAM_KEYS: BRY
           LINEAR_PUBLIC_LABELS: public-feed
           PUBLIC_WORKSPACE_KEY: brysonbenjamin
-          LINEAR_COMPLETED_GRACE_DAYS: "7"
+          LINEAR_COMPLETED_GRACE_DAYS: "3"
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_D1_DATABASE_ID: 630b3025-d7a9-4039-bf3e-0ca97bda6843

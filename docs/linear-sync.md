@@ -21,7 +21,7 @@ Only sync issues that match all of these:
 - Team key is in `LINEAR_TEAM_KEYS`
 - Issue has a public label from `LINEAR_PUBLIC_LABELS`, defaulting to `public-feed`
 - Issue is not canceled
-- If the issue is completed, it's still within `LINEAR_COMPLETED_GRACE_DAYS` (default 7) of its `completedAt` — completed work stays visible as a "shipped" entry for a window, then ages out
+- If the issue is completed, it's still within `LINEAR_COMPLETED_GRACE_DAYS` (default 3) of its `completedAt` — completed work stays visible as a "shipped" entry for a window, then ages out
 
 The sync maps Linear records into the public projection:
 
