@@ -58,7 +58,7 @@ export function WorkShowcase({ projects }: WorkShowcaseProps) {
         ))}
       </div>
 
-      <Card className="project-card project-card--feature" interactive variant="joint">
+      <Card className="project-card project-card--feature" variant="joint">
         <ProjectBody project={featured} />
         <dl className="project-proof-list">
           {proofPoints.map((point) => (
@@ -71,13 +71,13 @@ export function WorkShowcase({ projects }: WorkShowcaseProps) {
       </Card>
 
       {bridge ? (
-        <Card className="project-card project-card--bridge" interactive variant="notch">
+        <Card className="project-card project-card--bridge" variant="notch">
           <ProjectBody project={bridge} />
         </Card>
       ) : null}
 
       {system ? (
-        <Card className="project-card project-card--system" interactive>
+        <Card className="project-card project-card--system">
           <ProjectBody project={system} />
         </Card>
       ) : null}

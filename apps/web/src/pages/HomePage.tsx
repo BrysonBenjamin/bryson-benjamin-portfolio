@@ -71,13 +71,13 @@ function HomePage() {
 
         <div className="post-list">
           {posts.map((post) => (
-            <a className="post-link" href="/" key={post.title} onClick={(event) => event.preventDefault()}>
+            <article className="post-link" key={post.title}>
               <span className="post-link__title">{post.title}</span>
               <span className="post-link__meta">
                 {post.date} / {post.minutes} min
               </span>
               <p>{post.teaser}</p>
-            </a>
+            </article>
           ))}
         </div>
       </Section>
