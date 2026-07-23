@@ -8,6 +8,8 @@
     "build": "bun build src/index.ts --target bun --outdir dist",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "eval:sa-sa": "bun src/sa-sa/evaluations.ts",
+    "eval:sa-sa:live": "bun src/sa-sa/liveEvaluation.ts",
     "sync:linear": "bun src/jobs/syncLinearFeed.ts",
     "generate:openapi": "bun src/scripts/generateOpenApi.ts"
   },

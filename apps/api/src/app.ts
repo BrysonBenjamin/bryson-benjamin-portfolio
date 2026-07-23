@@ -3,16 +3,28 @@ import { parseSaSaTurnRequest } from "@bryson-benjamin/sa-sa-contracts";
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
-import { createSaSaAgentGateway } from "./sa-sa/agent";
+import { createSaSaAgentGateway, type SaSaAgentMode } from "./sa-sa/agent";
+import { createDeterministicSaSaModelAdapter, createOpenAiSaSaModelAdapter } from "./sa-sa/model";
 
-const databaseUrl = Bun.env.DATABASE_URL;
+const runtimeEnv = typeof Bun === "undefined" ? {} : Bun.env;
+const databaseUrl = runtimeEnv.DATABASE_URL;
 const db = databaseUrl ? createDb(databaseUrl) : null;
-const allowedOrigins = (Bun.env.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173,https://brysonbenjamin.com")
+const allowedOrigins = (runtimeEnv.CORS_ORIGIN ?? "http://localhost:5173,http://127.0.0.1:5173,https://brysonbenjamin.com")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+const configuredSaSaMode = runtimeEnv.SA_SA_AGENT_MODE;
+const openAiKey = runtimeEnv.OPENAI_API_KEY;
+const openAiModel = runtimeEnv.SA_SA_OPENAI_MODEL;
+const dailySpendLimit = Number(runtimeEnv.SA_SA_DAILY_SPEND_LIMIT_USD ?? "0");
+const reservedTurnCost = Number(runtimeEnv.SA_SA_RESERVED_TURN_COST_USD ?? "0");
+const canUseOpenAi = Boolean(openAiKey && openAiModel && dailySpendLimit > 0 && reservedTurnCost > 0);
+const saSaMode: SaSaAgentMode = configuredSaSaMode === "disabled" ? "disabled" : configuredSaSaMode === "openai" && canUseOpenAi ? "provider" : "deterministic";
 const saSaAgent = createSaSaAgentGateway({
-  mode: Bun.env.SA_SA_AGENT_MODE === "disabled" ? "disabled" : "deterministic"
+  mode: saSaMode,
+  adapter: saSaMode === "provider" ? createOpenAiSaSaModelAdapter({ apiKey: openAiKey!, model: openAiModel! }) : createDeterministicSaSaModelAdapter(),
+  dailySpendLimitCents: canUseOpenAi ? Math.floor(dailySpendLimit * 100) : Number.POSITIVE_INFINITY,
+  reservedTurnCostCents: canUseOpenAi ? Math.ceil(reservedTurnCost * 100) : 0
 });
 
 function hasAllowedOrigin(origin: string | undefined) {

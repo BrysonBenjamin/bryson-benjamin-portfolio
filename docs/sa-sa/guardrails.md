@@ -32,3 +32,5 @@ Pages register anchors, exclusion/safe zones, and responsive availability. The p
 ## Agent failure policy
 
 The guide has independent `disabled`, `offline`, and `error` states. None can disable links, page actions, existing task overlays, or the local actor controls. A deterministic guide is explicitly labelled as public-portfolio guidance; a real model provider may not be described as active until server credentials, budget caps, and live evaluation are configured.
+
+The semantic allowlist, execution targets, and non-goals are recorded in [capability-contract.md](./capability-contract.md). Provider output is never trusted as a DOM instruction, URL, asset name, or executable command.

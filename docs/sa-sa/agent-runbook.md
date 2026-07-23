@@ -4,7 +4,7 @@
 
 The deployed gateway supports a **deterministic grounded guide** (`SA_SA_AGENT_MODE=deterministic`) and a hard-off mode (`SA_SA_AGENT_MODE=disabled`). The deterministic guide calls only the approved in-process portfolio tools and streams typed SSE events. It is deliberately disclosed in the UI as a public-portfolio guide; it is not represented as a live language-model answer.
 
-A real model provider is not configured in this repository because that requires a server-side provider credential and an explicit spend limit. The provider-neutral contract and gateway boundary are in place; adding a live adapter must preserve the policy below and add the live evaluation evidence before changing this mode’s user-facing disclosure.
+The gateway has a provider-neutral adapter boundary. Its CI default remains deterministic; an optional server-only OpenAI adapter activates only when its credential, model name, daily spend limit, and per-turn cost reservation are all configured. The browser never receives a provider key or provider-native payload.
 
 ## Production route
 
@@ -28,12 +28,14 @@ The web app stores only the opaque session id and completed transcript in `sessi
 
 ## Safety envelope
 
+- [Capability contract](./capability-contract.md) defines the complete shared allowlist and non-goals.
 - Non-empty `Origin` headers must match `CORS_ORIGIN`; there are no browser-held provider credentials.
 - Request body, message, context, tool-call count, action IDs, and source URLs are bounded and validated by `@bryson-benjamin/sa-sa-contracts`.
 - The guide has no HTTP, DOM, filesystem, database, code-execution, external-message, or arbitrary URL tool.
 - Private-data and prompt-injection-shaped requests fail closed with an explicit policy message.
 - Tool facts come only from `@bryson-benjamin/portfolio-content`; public feed lookup is intentionally unavailable until it can use the same public-only source.
 - No conversation content is logged by the gateway.
+- The gateway validates adapter output before every tool, behavior, and page-action boundary; malformed output, cancellation, timeout, and provider failure become normalized typed failures.
 
 ## Verification
 
@@ -43,6 +45,12 @@ Run the deterministic checks without provider credentials:
 # Node 20+
 npm run test --workspace @bryson-benjamin/api
 npm run test --workspace @bryson-benjamin/web
+```
+
+Run the deterministic evaluation gate as well:
+
+```bash
+bun run --cwd apps/api eval:sa-sa
 ```
 
 Then run the local API and web app, open Sa-Sa, ask “What are you building?”, confirm source links, then ask “Open the second one.” The latter must produce the registered `scroll-to-section` action with a bounded `sectionId` input, not a route, selector, or URL supplied by the guide. Confirm that the action result is visible in the conversation; stale, denied, failed, and timed-out actions must leave Sa-Sa recoverable.
