@@ -3,9 +3,10 @@ import { Mascot } from "../brand/Mascot";
 import { ThemeToggle } from "../brand/ThemeToggle";
 
 const navItems = [
-  { href: "#work", label: "Work" },
-  { href: "#writing", label: "Writing" },
-  { href: "#about", label: "About" }
+  { href: "/#work", label: "Work" },
+  { href: "/#writing", label: "Writing" },
+  { href: "/#about", label: "About" },
+  { href: "/sa-sa/playground", label: "Sa-Sa Lab" }
 ];
 
 export function SiteHeader() {

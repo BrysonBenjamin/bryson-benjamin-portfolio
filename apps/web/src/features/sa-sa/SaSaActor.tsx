@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent } from "react";
+import { MessageCircle, Pause, Play, Sparkles, WandSparkles } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { SaSa } from "../../components/brand/SaSa";
 import { createSaSaAmbientScheduler, type SaSaAmbientVisual } from "./ambient";
 import { useSaSaConversation } from "./conversation";
@@ -41,11 +43,14 @@ export function SaSaActor({ hidden = false }: SaSaActorProps) {
   const [ambient, setAmbient] = useState<SaSaAmbientVisual>(restingVisual);
   const [placement, setPlacement] = useState<SaSaPlacement | null>(null);
   const [pageVisible, setPageVisible] = useState(() => document.visibilityState === "visible");
+  const [menuOpen, setMenuOpen] = useState(false);
   const schedulerRef = useRef(createSaSaAmbientScheduler("sa-sa-site-v1"));
   const interactionGateRef = useRef(createSaSaDirectInteractionGate());
   const interactionTimeoutRef = useRef<number | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const navigate = useNavigate();
   const { dispatch, requestBehavior, state } = useSaSaRuntime();
   const { getAnchorElement, getSafeZoneElement, runAction, snapshot } = useSaSaScenes();
   const agentContext = useMemo(
@@ -195,6 +200,25 @@ export function SaSaActor({ hidden = false }: SaSaActorProps) {
   }, [expanded]);
 
   useEffect(() => {
+    if (!menuOpen) return;
+
+    const frame = window.requestAnimationFrame(() => menuRef.current?.focus());
+
+    function closeMenuOnOutsidePress(event: globalThis.PointerEvent) {
+      const target = event.target as Node;
+      if (!menuRef.current?.contains(target) && !triggerRef.current?.contains(target)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", closeMenuOnOutsidePress);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", closeMenuOnOutsidePress);
+    };
+  }, [menuOpen]);
+
+  useEffect(() => {
     if (conversation.state.status === "success") {
       const timeout = window.setTimeout(() => {
         dispatch({ type: "BEHAVIOR_FINISHED", behavior: "success" });
@@ -209,6 +233,7 @@ export function SaSaActor({ hidden = false }: SaSaActorProps) {
   }, [conversation, dispatch, requestAgentBehavior]);
 
   function open() {
+    setMenuOpen(false);
     setExpanded(true);
     dispatch({ type: "SYSTEM_RESET" });
   }
@@ -216,12 +241,14 @@ export function SaSaActor({ hidden = false }: SaSaActorProps) {
   function close() {
     conversation.stop();
     setExpanded(false);
+    setMenuOpen(false);
     dispatch({ type: "SYSTEM_RESET" });
     window.requestAnimationFrame(() => triggerRef.current?.focus());
   }
 
   function togglePause() {
     setPaused((current) => !current);
+    setMenuOpen(false);
     dispatch({ type: "SYSTEM_RESET" });
   }
 
@@ -229,6 +256,7 @@ export function SaSaActor({ hidden = false }: SaSaActorProps) {
     conversation.stop();
     setExpanded(false);
     setDismissed(true);
+    setMenuOpen(false);
     dispatch({ type: "SYSTEM_RESET" });
   }
 
@@ -260,6 +288,23 @@ export function SaSaActor({ hidden = false }: SaSaActorProps) {
 
   function clearDirectEyeDirection() {
     setAmbient((current) => ({ ...current, eyes: "center" }));
+  }
+
+  function openCharacterMenu(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    setMenuOpen(true);
+  }
+
+  function handleTriggerKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+      event.preventDefault();
+      setMenuOpen(true);
+    }
+  }
+
+  function openPlayground() {
+    setMenuOpen(false);
+    navigate("/sa-sa/playground");
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -401,12 +446,28 @@ export function SaSaActor({ hidden = false }: SaSaActorProps) {
           </form>
         </section>
       ) : null}
+      {menuOpen ? (
+        <div aria-label="Sa-Sa actions" className="sa-sa-actor__menu" onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            setMenuOpen(false);
+            triggerRef.current?.focus();
+          }
+        }} ref={menuRef} role="menu" tabIndex={-1}>
+          <button onClick={open} role="menuitem" type="button"><MessageCircle size={16} aria-hidden="true" />Chat with Sa-Sa</button>
+          <button onClick={() => { reactToDirectInput(); setMenuOpen(false); }} role="menuitem" type="button"><Sparkles size={16} aria-hidden="true" />React</button>
+          <button onClick={togglePause} role="menuitem" type="button">{paused ? <Play size={16} aria-hidden="true" /> : <Pause size={16} aria-hidden="true" />}{paused ? "Resume motion" : "Pause motion"}</button>
+          <button onClick={openPlayground} role="menuitem" type="button"><WandSparkles size={16} aria-hidden="true" />Open playground</button>
+          <button onClick={dismiss} role="menuitem" type="button">Hide Sa-Sa</button>
+        </div>
+      ) : null}
       <button
         aria-expanded={expanded}
         aria-label={expanded ? "Sa-Sa is open" : "Open Sa-Sa"}
         className="sa-sa-actor__trigger"
         onFocus={reactToDirectInput}
         onClick={expanded ? close : open}
+        onContextMenu={openCharacterMenu}
+        onKeyDown={handleTriggerKeyDown}
         onPointerEnter={reactToDirectInput}
         onPointerLeave={clearDirectEyeDirection}
         onPointerMove={directEyeDirection}
