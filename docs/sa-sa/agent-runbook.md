@@ -45,4 +45,4 @@ npm run test --workspace @bryson-benjamin/api
 npm run test --workspace @bryson-benjamin/web
 ```
 
-Then run the local API and web app, open Sa-Sa, ask “What are you building?”, confirm source links, then ask “Open the second one.” The latter must produce the registered `scroll-to-section` action with a bounded `sectionId` input, not a route, selector, or URL supplied by the guide.
+Then run the local API and web app, open Sa-Sa, ask “What are you building?”, confirm source links, then ask “Open the second one.” The latter must produce the registered `scroll-to-section` action with a bounded `sectionId` input, not a route, selector, or URL supplied by the guide. Confirm that the action result is visible in the conversation; stale, denied, failed, and timed-out actions must leave Sa-Sa recoverable.

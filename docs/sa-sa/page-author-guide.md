@@ -18,13 +18,12 @@ function ProductPage() {
   const dockRef = useSaSaAnchor("product-dock");
   const actionsRef = useSaSaSafeZone("product-actions");
 
-  useSaSaPageAction("scroll-to-section", (input) => {
-    if (input.sectionId !== "about") {
-      throw new Error("Unsupported section.");
-    }
-
-    document.getElementById(input.sectionId)?.scrollIntoView({ block: "start" });
-  });
+  const isAboutAction = (input) => Object.keys(input).length === 1 && input.sectionId === "about";
+  useSaSaPageAction(
+    "scroll-to-section",
+    (input) => document.getElementById(input.sectionId)?.scrollIntoView({ block: "start" }),
+    isAboutAction
+  );
 
   return (
     <>
@@ -56,8 +55,8 @@ The observer only registers the scene while at least 25% of its element is visib
 
 ## Rules for actions and context
 
-- Every action has a stable ID in the scene and a handler registered by `useSaSaPageAction`.
-- Action handlers must be local, reversible presentation/navigation work. They may receive bounded semantic input such as `{ sectionId: "about" }`, never selectors, URLs, callbacks, code, or asset IDs.
+- Every action has a stable ID in the scene, a handler, and a page-owned input validator registered by `useSaSaPageAction`. The shared contract validates bounded payload shape; the page validator owns the action-specific semantics.
+- Action handlers must be local, reversible presentation/navigation work. Their validator must allow only bounded semantic input such as `{ sectionId: "about" }`, never selectors, URLs, callbacks, code, or asset IDs. The registry returns typed `unavailable`, `denied`, `timed-out`, or `failed` results without breaking the conversation.
 - Only the active scene’s action IDs and content references enter `SaSaPageContext`.
 - `content` may name a public `section`, `project`, `feed-item`, or `document`; never pass HTML, drafts, selected text, private data, or arbitrary URLs.
 - A missing ref, unavailable desktop-only anchor, or absent action handler safely falls back to the viewport dock or an unavailable result.

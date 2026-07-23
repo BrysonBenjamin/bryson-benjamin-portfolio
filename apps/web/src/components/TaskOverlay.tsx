@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useFeedItem } from "../hooks/useFeedItem";
 import { SaSaScene, useSaSaPageAction, useSaSaSafeZone } from "../features/sa-sa/SaSaSceneProvider";
+import { isEmptySaSaPageActionInput } from "../features/sa-sa/pageActions";
 import TaskDetail from "./TaskDetail";
 
 function TaskOverlay() {
@@ -10,7 +11,7 @@ function TaskOverlay() {
   const { item, status } = useFeedItem(id);
   const navigate = useNavigate();
   const panelRef = useSaSaSafeZone("task-overlay-panel");
-  useSaSaPageAction("close-task-overlay", () => navigate(-1));
+  useSaSaPageAction("close-task-overlay", () => navigate(-1), isEmptySaSaPageActionInput);
   const scene = {
     id: "task-overlay",
     priority: 100,

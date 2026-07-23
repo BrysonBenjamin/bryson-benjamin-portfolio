@@ -14,6 +14,7 @@ import {
   useSaSaSectionScene,
   useSaSaSafeZone
 } from "../features/sa-sa/SaSaSceneProvider";
+import type { SaSaPageActionInput } from "@bryson-benjamin/sa-sa-contracts";
 
 const homeScene = {
   id: "home",
@@ -41,6 +42,13 @@ const writingScene = {
   actions: [{ id: "scroll-to-section", label: "Show a page section" }]
 } as const;
 
+function isScrollToSectionInput(input: SaSaPageActionInput) {
+  return (
+    Object.keys(input).length === 1 &&
+    (input.sectionId === "work" || input.sectionId === "about" || input.sectionId === "writing")
+  );
+}
+
 function HomePage() {
   const heroAnchorRef = useSaSaAnchor("home-hero");
   const workAnchorRef = useSaSaAnchor("home-work");
@@ -56,19 +64,15 @@ function HomePage() {
     [writingAnchorRef, writingSceneRef]
   );
   const scrollToSection = useCallback((id: string) => {
-    document.getElementById(id)?.scrollIntoView({
+    const section = document.getElementById(id);
+    if (!section) throw new Error("Sa-Sa section is unavailable.");
+    section.scrollIntoView({
       behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
       block: "start"
     });
   }, []);
 
-  useSaSaPageAction("scroll-to-section", (input) => {
-    if (input.sectionId !== "work" && input.sectionId !== "about" && input.sectionId !== "writing") {
-      throw new Error("Unsupported Sa-Sa section action.");
-    }
-
-    scrollToSection(input.sectionId);
-  });
+  useSaSaPageAction("scroll-to-section", (input) => scrollToSection(input.sectionId), isScrollToSectionInput);
 
   return (
     <>

@@ -1,4 +1,8 @@
-import { saSaContractVersion, type SaSaTurnRequest } from "@bryson-benjamin/sa-sa-contracts";
+import {
+  saSaContractVersion,
+  type SaSaTurnRequest,
+  validateSaSaPageActionProposal
+} from "@bryson-benjamin/sa-sa-contracts";
 import { describe, expect, it } from "vitest";
 import { createSaSaAgentGateway } from "./agent";
 
@@ -27,6 +31,23 @@ async function collect<T>(stream: AsyncIterable<T>) {
 }
 
 describe("Sa-Sa deterministic gateway", () => {
+  it("validates the bounded action payload before it can be streamed to a page", () => {
+    expect(
+      validateSaSaPageActionProposal({
+        actionId: "scroll-to-section",
+        label: "Show selected work",
+        input: { sectionId: "work" }
+      })
+    ).toMatchObject({ success: true });
+    expect(
+      validateSaSaPageActionProposal({
+        actionId: "scroll-to-section",
+        label: "Show selected work",
+        input: { sectionId: 42 }
+      })
+    ).toMatchObject({ success: false });
+  });
+
   it("streams grounded tool work, source references, and a registered page action", async () => {
     const ids = ["session-1", "turn-1"];
     const gateway = createSaSaAgentGateway({

@@ -55,7 +55,7 @@ export type SaSaPageActionInput = Record<string, string>;
 
 export type SaSaPageActionResult = {
   actionId: string;
-  outcome: "completed" | "unavailable" | "failed";
+  outcome: "completed" | "unavailable" | "denied" | "timed-out" | "failed";
   message: string;
 };
 
@@ -120,6 +120,12 @@ function isBoundedStringRecord(value: unknown, maxEntries = 8): value is Record<
     Object.keys(value).length <= maxEntries &&
     Object.entries(value).every(([key, entry]) => isNonEmptyString(key, 64) && typeof entry === "string" && entry.length <= 160)
   );
+}
+
+export function validateSaSaPageActionInput(value: unknown): SaSaValidationResult<SaSaPageActionInput> {
+  return isBoundedStringRecord(value)
+    ? { success: true, data: value }
+    : { success: false, issues: ["Page action inputs must be bounded strings."] };
 }
 
 export function isSafePublicHref(value: unknown): value is string {
@@ -217,9 +223,12 @@ export function validateSaSaToolCall(value: unknown): SaSaValidationResult<SaSaT
 }
 
 export function validateSaSaPageActionProposal(value: unknown): SaSaValidationResult<SaSaPageActionProposal> {
-  if (!isRecord(value) || !isNonEmptyString(value.actionId) || !isNonEmptyString(value.label) || !isBoundedStringRecord(value.input)) {
+  if (!isRecord(value) || !isNonEmptyString(value.actionId) || !isNonEmptyString(value.label)) {
     return { success: false, issues: ["Invalid page action proposal."] };
   }
 
-  return { success: true, data: value as SaSaPageActionProposal };
+  const input = validateSaSaPageActionInput(value.input);
+  if (!input.success) return input;
+
+  return { success: true, data: { ...value, input: input.data } as SaSaPageActionProposal };
 }

@@ -8,6 +8,7 @@ import {
   useSaSaPageAction,
   useSaSaSafeZone
 } from "../features/sa-sa/SaSaSceneProvider";
+import { isEmptySaSaPageActionInput } from "../features/sa-sa/pageActions";
 
 function TaskPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,7 +16,7 @@ function TaskPage() {
   const navigate = useNavigate();
   const dockAnchorRef = useSaSaAnchor("task-detail-dock");
   const readingRef = useSaSaSafeZone("task-detail-reading");
-  useSaSaPageAction("return-to-log", () => navigate("/"));
+  useSaSaPageAction("return-to-log", () => navigate("/"), isEmptySaSaPageActionInput);
   const scene = {
     id: "task-detail",
     priority: 20,

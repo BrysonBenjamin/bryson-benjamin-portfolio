@@ -30,7 +30,7 @@ export type SaSaConversationState = {
   actionResult: SaSaPageActionResult | null;
 };
 
-type ConversationAction =
+export type SaSaConversationAction =
   | { type: "started"; session: SaSaConversationState["session"]; turnId: string; message: string }
   | { type: "event"; event: SaSaAgentEvent }
   | { type: "action-result"; result: SaSaPageActionResult }
@@ -39,7 +39,7 @@ type ConversationAction =
   | { type: "settle" }
   | { type: "cleared" };
 
-function emptyState(): SaSaConversationState {
+export function createEmptySaSaConversationState(): SaSaConversationState {
   return {
     session: null,
     messages: [],
@@ -54,13 +54,13 @@ function emptyState(): SaSaConversationState {
 function restoreState(): SaSaConversationState {
   try {
     const raw = window.sessionStorage.getItem(storageKey);
-    if (!raw) return emptyState();
+    if (!raw) return createEmptySaSaConversationState();
     const value = JSON.parse(raw) as Partial<SaSaConversationState>;
 
-    if (!value.session || !Array.isArray(value.messages)) return emptyState();
+    if (!value.session || !Array.isArray(value.messages)) return createEmptySaSaConversationState();
 
     return {
-      ...emptyState(),
+      ...createEmptySaSaConversationState(),
       session: value.session,
       messages: value.messages.filter(
         (message): message is SaSaChatMessage =>
@@ -73,7 +73,7 @@ function restoreState(): SaSaConversationState {
       lastUserMessage: typeof value.lastUserMessage === "string" ? value.lastUserMessage : null
     };
   } catch {
-    return emptyState();
+    return createEmptySaSaConversationState();
   }
 }
 
@@ -89,8 +89,11 @@ function statusFromCue(cue: SaSaBehaviorCue): SaSaConversationStatus {
   return cue;
 }
 
-function reducer(state: SaSaConversationState, action: ConversationAction): SaSaConversationState {
-  if (action.type === "cleared") return emptyState();
+export function reduceSaSaConversation(
+  state: SaSaConversationState,
+  action: SaSaConversationAction
+): SaSaConversationState {
+  if (action.type === "cleared") return createEmptySaSaConversationState();
 
   if (action.type === "started") {
     return {
@@ -228,11 +231,11 @@ async function readSaSaEventStream(
 type UseSaSaConversationOptions = {
   context: SaSaPageContext;
   onBehavior: (behavior: SaSaBehaviorCue) => void;
-  runAction: (id: string, input: Record<string, string>) => Promise<SaSaPageActionResult>;
+  runAction: (id: string, input: unknown) => Promise<SaSaPageActionResult>;
 };
 
 export function useSaSaConversation({ context, onBehavior, runAction }: UseSaSaConversationOptions) {
-  const [state, dispatch] = useReducer(reducer, undefined, restoreState);
+  const [state, dispatch] = useReducer(reduceSaSaConversation, undefined, restoreState);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
