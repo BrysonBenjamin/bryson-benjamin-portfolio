@@ -54,7 +54,7 @@ function readConfig(): SyncConfig | null {
     .map((label) => label.trim())
     .filter(Boolean);
   const workspace = Bun.env.PUBLIC_WORKSPACE_KEY ?? "brysonbenjamin";
-  const completedGraceDays = Number(Bun.env.LINEAR_COMPLETED_GRACE_DAYS ?? "7");
+  const completedGraceDays = Number(Bun.env.LINEAR_COMPLETED_GRACE_DAYS ?? "3");
   const cloudflareApiToken = Bun.env.CLOUDFLARE_API_TOKEN;
   const cloudflareAccountId = Bun.env.CLOUDFLARE_ACCOUNT_ID;
   const cloudflareDatabaseId = Bun.env.CLOUDFLARE_D1_DATABASE_ID;
@@ -75,7 +75,7 @@ function readConfig(): SyncConfig | null {
     teamKeys,
     publicLabels,
     workspace,
-    completedGraceDays: Number.isFinite(completedGraceDays) ? completedGraceDays : 7,
+    completedGraceDays: Number.isFinite(completedGraceDays) ? completedGraceDays : 3,
     cloudflareApiToken,
     cloudflareAccountId,
     cloudflareDatabaseId
