@@ -1,0 +1,3 @@
+display_name: Jujutsu Workflow
+short_description: Repo jj workflow for local and cloud work
+default_prompt: "Use the project Jujutsu workflow for this repo: bootstrap jj if needed, work in local jj changes, and batch-push the PR bookmark only when ready for CI."

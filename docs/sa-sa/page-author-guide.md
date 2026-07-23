@@ -11,15 +11,19 @@ const productScene = {
   anchors: [{ id: "product-dock", placement: "inline-end", availability: "all" }],
   safeZones: [{ id: "product-actions" }],
   content: [{ type: "project", id: "portfolio" }],
-  actions: [{ id: "scroll-to-about", label: "Show about" }]
+  actions: [{ id: "scroll-to-section", label: "Show a page section" }]
 } as const;
 
 function ProductPage() {
   const dockRef = useSaSaAnchor("product-dock");
   const actionsRef = useSaSaSafeZone("product-actions");
 
-  useSaSaPageAction("scroll-to-about", () => {
-    document.getElementById("about")?.scrollIntoView({ block: "start" });
+  useSaSaPageAction("scroll-to-section", (input) => {
+    if (input.sectionId !== "about") {
+      throw new Error("Unsupported section.");
+    }
+
+    document.getElementById(input.sectionId)?.scrollIntoView({ block: "start" });
   });
 
   return (
@@ -53,7 +57,7 @@ The observer only registers the scene while at least 25% of its element is visib
 ## Rules for actions and context
 
 - Every action has a stable ID in the scene and a handler registered by `useSaSaPageAction`.
-- Action handlers must be local, reversible presentation/navigation work. They receive no model-provided selector, URL, callback, or argument.
+- Action handlers must be local, reversible presentation/navigation work. They may receive bounded semantic input such as `{ sectionId: "about" }`, never selectors, URLs, callbacks, code, or asset IDs.
 - Only the active scene’s action IDs and content references enter `SaSaPageContext`.
 - `content` may name a public `section`, `project`, `feed-item`, or `document`; never pass HTML, drafts, selected text, private data, or arbitrary URLs.
 - A missing ref, unavailable desktop-only anchor, or absent action handler safely falls back to the viewport dock or an unavailable result.

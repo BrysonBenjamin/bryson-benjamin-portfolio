@@ -2,7 +2,7 @@ import { saSaContractVersion, type SaSaTurnRequest } from "@bryson-benjamin/sa-s
 import { describe, expect, it } from "vitest";
 import { createSaSaAgentGateway } from "./agent";
 
-function request(sessionId: string, message: string, actionIds = ["scroll-to-work"]): SaSaTurnRequest {
+function request(sessionId: string, message: string, actionIds = ["scroll-to-section"]): SaSaTurnRequest {
   return {
     version: saSaContractVersion,
     sessionId,
@@ -43,7 +43,14 @@ describe("Sa-Sa deterministic gateway", () => {
     expect(payloads.some((payload) => payload.type === "completed" && payload.sources.length > 0)).toBe(true);
 
     const actionEvents = await collect(gateway.streamTurn(request(session.id, "Open the second one")));
-    expect(actionEvents.some((event) => event.payload.type === "action-proposed" && event.payload.action.actionId === "scroll-to-work")).toBe(true);
+    expect(
+      actionEvents.some(
+        (event) =>
+          event.payload.type === "action-proposed" &&
+          event.payload.action.actionId === "scroll-to-section" &&
+          event.payload.action.input.sectionId === "work"
+      )
+    ).toBe(true);
   });
 
   it("fails closed for private-data and prompt-injection attempts", async () => {

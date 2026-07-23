@@ -74,5 +74,5 @@ fi
 # Used after `jj new` + edits to move your PR bookmark to the change you just finished.
 jj config set --user 'aliases.tug' '["bookmark", "move", "--from", "closest_bookmark(@-)", "--to", "@-"]' 2>/dev/null || true
 
-log "Done. See .claude/skills/jujutsu-workflow/SKILL.md for the workflow this repo uses."
+log "Done. See .codex/skills/jujutsu-workflow/SKILL.md for the Codex workflow this repo uses."
 jj log --limit 3

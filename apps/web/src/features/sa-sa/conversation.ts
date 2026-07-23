@@ -228,7 +228,7 @@ async function readSaSaEventStream(
 type UseSaSaConversationOptions = {
   context: SaSaPageContext;
   onBehavior: (behavior: SaSaBehaviorCue) => void;
-  runAction: (id: string) => Promise<SaSaPageActionResult>;
+  runAction: (id: string, input: Record<string, string>) => Promise<SaSaPageActionResult>;
 };
 
 export function useSaSaConversation({ context, onBehavior, runAction }: UseSaSaConversationOptions) {
@@ -291,7 +291,10 @@ export function useSaSaConversation({ context, onBehavior, runAction }: UseSaSaC
           dispatch({ type: "event", event });
           if (event.payload.type === "behavior-requested") onBehavior(event.payload.behavior);
           if (event.payload.type === "action-proposed") {
-            dispatch({ type: "action-result", result: await runAction(event.payload.action.actionId) });
+            dispatch({
+              type: "action-result",
+              result: await runAction(event.payload.action.actionId, event.payload.action.input)
+            });
           }
         });
       } catch (error) {

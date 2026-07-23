@@ -28,8 +28,7 @@ const homeScene = {
     { type: "section", id: "about" }
   ],
   actions: [
-    { id: "scroll-to-work", label: "Show selected work" },
-    { id: "scroll-to-about", label: "Show about" }
+    { id: "scroll-to-section", label: "Show a page section" }
   ]
 } as const;
 
@@ -39,7 +38,7 @@ const writingScene = {
   anchors: [{ id: "home-writing", placement: "inline-start", availability: "desktop" }],
   safeZones: [{ id: "home-writing-posts" }],
   content: [{ type: "document", id: "portfolio-writing" }],
-  actions: [{ id: "scroll-to-about", label: "Show about" }]
+  actions: [{ id: "scroll-to-section", label: "Show a page section" }]
 } as const;
 
 function HomePage() {
@@ -63,8 +62,13 @@ function HomePage() {
     });
   }, []);
 
-  useSaSaPageAction("scroll-to-work", () => scrollToSection("work"));
-  useSaSaPageAction("scroll-to-about", () => scrollToSection("about"));
+  useSaSaPageAction("scroll-to-section", (input) => {
+    if (input.sectionId !== "work" && input.sectionId !== "about" && input.sectionId !== "writing") {
+      throw new Error("Unsupported Sa-Sa section action.");
+    }
+
+    scrollToSection(input.sectionId);
+  });
 
   return (
     <>
