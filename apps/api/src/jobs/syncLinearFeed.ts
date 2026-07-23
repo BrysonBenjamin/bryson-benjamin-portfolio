@@ -20,6 +20,7 @@ type LinearIssuesResponse = {
   data?: {
     issues: {
       nodes: LinearIssue[];
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
     };
   };
   errors?: { message: string }[];
@@ -97,9 +98,10 @@ function isWithinCompletedGrace(issue: LinearIssue, graceDays: number): boolean 
 
 async function fetchPublicIssues(config: SyncConfig): Promise<LinearIssue[]> {
   const query = /* GraphQL */ `
-    query PublicFeedIssues($teamKeys: [String!], $labels: [String!]) {
+    query PublicFeedIssues($teamKeys: [String!], $labels: [String!], $after: String) {
       issues(
         first: 50
+        after: $after
         orderBy: updatedAt
         filter: {
           team: { key: { in: $teamKeys } }
@@ -127,42 +129,55 @@ async function fetchPublicIssues(config: SyncConfig): Promise<LinearIssue[]> {
             identifier
           }
         }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
       }
     }
   `;
 
-  const response = await fetch(LINEAR_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: config.linearApiKey
-    },
-    body: JSON.stringify({
-      query,
-      variables: { teamKeys: config.teamKeys, labels: config.publicLabels }
-    })
-  });
+  const issues: LinearIssue[] = [];
+  let after: string | null = null;
 
-  const remaining = response.headers.get("X-RateLimit-Requests-Remaining");
-  if (remaining !== null && Number(remaining) < 50) {
-    console.warn(`linear feed sync: rate limit budget low (${remaining} requests remaining)`);
-  }
+  do {
+    const response = await fetch(LINEAR_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: config.linearApiKey
+      },
+      body: JSON.stringify({
+        query,
+        variables: { teamKeys: config.teamKeys, labels: config.publicLabels, after }
+      })
+    });
 
-  if (response.status === 429) {
-    throw new Error("linear feed sync: rate limited by Linear, stopping this run cleanly");
-  }
+    const remaining = response.headers.get("X-RateLimit-Requests-Remaining");
+    if (remaining !== null && Number(remaining) < 50) {
+      console.warn(`linear feed sync: rate limit budget low (${remaining} requests remaining)`);
+    }
 
-  if (!response.ok) {
-    throw new Error(`linear feed sync: Linear API request failed with ${response.status}`);
-  }
+    if (response.status === 429) {
+      throw new Error("linear feed sync: rate limited by Linear, stopping this run cleanly");
+    }
 
-  const payload = (await response.json()) as LinearIssuesResponse;
+    if (!response.ok) {
+      throw new Error(`linear feed sync: Linear API request failed with ${response.status}`);
+    }
 
-  if (payload.errors?.length) {
-    throw new Error(`linear feed sync: ${payload.errors.map((error) => error.message).join(", ")}`);
-  }
+    const payload = (await response.json()) as LinearIssuesResponse;
 
-  return payload.data?.issues.nodes ?? [];
+    if (payload.errors?.length) {
+      throw new Error(`linear feed sync: ${payload.errors.map((error) => error.message).join(", ")}`);
+    }
+
+    const page = payload.data?.issues;
+    issues.push(...(page?.nodes ?? []));
+    after = page?.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+  } while (after);
+
+  return issues;
 }
 
 function toDetail(description: string | null): string {
@@ -174,10 +189,27 @@ function toDetail(description: string | null): string {
   return firstParagraph.length > 180 ? `${firstParagraph.slice(0, 177)}...` : firstParagraph;
 }
 
-async function upsertToD1(config: SyncConfig, issues: LinearIssue[]) {
+async function d1Query(config: SyncConfig, sql: string, params: unknown[]) {
   const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/d1/database/${config.cloudflareDatabaseId}/query`;
+
+  return fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.cloudflareApiToken}`
+    },
+    body: JSON.stringify({ sql, params })
+  });
+}
+
+async function upsertToD1(config: SyncConfig, issues: LinearIssue[]) {
   const activeIds = new Set(issues.map((issue) => issue.identifier));
 
+  // Insert/update every row with parent_id left NULL first. Rows can
+  // reference each other via the parent_id foreign key, and Linear's fetch
+  // order has no guarantee a parent is upserted before its children within
+  // the same run — writing parent_id up front risks a FK constraint failure
+  // against a parent row that doesn't exist yet.
   for (const [index, issue] of issues.entries()) {
     const detail = toDetail(issue.description);
     const body = issue.description?.trim() || detail;
@@ -185,76 +217,96 @@ async function upsertToD1(config: SyncConfig, issues: LinearIssue[]) {
       label: attachment.title,
       url: attachment.url
     }));
-    // Only keep the parent link if the parent is also in this run's gated
-    // set — otherwise it'd point at a page that doesn't exist publicly.
-    const parentId = issue.parent && activeIds.has(issue.parent.identifier) ? issue.parent.identifier : null;
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.cloudflareApiToken}`
-      },
-      body: JSON.stringify({
-        sql: `INSERT INTO public_feed_items
-            (id, workspace, source, source_id, state, title, detail, body, links_json, tone, sort_order, is_public, parent_id, updated_at)
-          VALUES (?, ?, 'linear', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET
-            workspace = excluded.workspace,
-            source = excluded.source,
-            source_id = excluded.source_id,
-            state = excluded.state,
-            title = excluded.title,
-            detail = excluded.detail,
-            body = excluded.body,
-            links_json = excluded.links_json,
-            tone = excluded.tone,
-            sort_order = excluded.sort_order,
-            is_public = excluded.is_public,
-            parent_id = excluded.parent_id,
-            updated_at = excluded.updated_at`,
-        params: [
-          issue.identifier,
-          config.workspace,
-          issue.identifier,
-          issue.state.name,
-          issue.title,
-          detail,
-          body,
-          JSON.stringify(links),
-          toneByStateType[issue.state.type] ?? "white",
-          index,
-          parentId,
-          issue.updatedAt
-        ]
-      })
-    });
+    const response = await d1Query(
+      config,
+      `INSERT INTO public_feed_items
+          (id, workspace, source, source_id, state, title, detail, body, links_json, tone, sort_order, is_public, parent_id, updated_at)
+        VALUES (?, ?, 'linear', ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          workspace = excluded.workspace,
+          source = excluded.source,
+          source_id = excluded.source_id,
+          state = excluded.state,
+          title = excluded.title,
+          detail = excluded.detail,
+          body = excluded.body,
+          links_json = excluded.links_json,
+          tone = excluded.tone,
+          sort_order = excluded.sort_order,
+          is_public = excluded.is_public,
+          updated_at = excluded.updated_at`,
+      [
+        issue.identifier,
+        config.workspace,
+        issue.identifier,
+        issue.state.name,
+        issue.title,
+        detail,
+        body,
+        JSON.stringify(links),
+        toneByStateType[issue.state.type] ?? "white",
+        index,
+        issue.updatedAt
+      ]
+    );
 
     if (!response.ok) {
-      throw new Error(`linear feed sync: D1 upsert failed for ${issue.identifier} with ${response.status}`);
+      throw new Error(
+        `linear feed sync: D1 upsert failed for ${issue.identifier} with ${response.status}: ${await response.text()}`
+      );
+    }
+  }
+
+  // Second pass: every row from this run now exists, so parent_id can be
+  // wired up safely. Only keep the parent link if the parent is also in
+  // this run's gated set — otherwise it'd point at a page that doesn't
+  // exist publicly.
+  for (const issue of issues) {
+    const parentId = issue.parent && activeIds.has(issue.parent.identifier) ? issue.parent.identifier : null;
+    if (!parentId) {
+      continue;
+    }
+
+    const response = await d1Query(config, `UPDATE public_feed_items SET parent_id = ? WHERE id = ?`, [
+      parentId,
+      issue.identifier
+    ]);
+
+    if (!response.ok) {
+      throw new Error(
+        `linear feed sync: D1 parent_id update failed for ${issue.identifier} with ${response.status}: ${await response.text()}`
+      );
     }
   }
 }
 
 async function pruneStaleRows(config: SyncConfig, currentIds: string[]) {
-  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/d1/database/${config.cloudflareDatabaseId}/query`;
-
-  const sql =
+  const whereStale =
     currentIds.length > 0
-      ? `DELETE FROM public_feed_items WHERE workspace = ? AND source = 'linear' AND id NOT IN (${currentIds.map(() => "?").join(", ")})`
-      : `DELETE FROM public_feed_items WHERE workspace = ? AND source = 'linear'`;
+      ? `workspace = ? AND source = 'linear' AND id NOT IN (${currentIds.map(() => "?").join(", ")})`
+      : `workspace = ? AND source = 'linear'`;
+  const params = [config.workspace, ...currentIds];
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.cloudflareApiToken}`
-    },
-    body: JSON.stringify({ sql, params: [config.workspace, ...currentIds] })
-  });
+  // A row about to be deleted may still be referenced by a surviving (or
+  // also-stale) row's parent_id FK. Null those references out first so the
+  // DELETE below can't fail with a foreign key constraint violation.
+  const clearParentResponse = await d1Query(
+    config,
+    `UPDATE public_feed_items SET parent_id = NULL WHERE parent_id IN (SELECT id FROM public_feed_items WHERE ${whereStale})`,
+    params
+  );
+
+  if (!clearParentResponse.ok) {
+    throw new Error(
+      `linear feed sync: D1 prune parent_id cleanup failed with ${clearParentResponse.status}: ${await clearParentResponse.text()}`
+    );
+  }
+
+  const response = await d1Query(config, `DELETE FROM public_feed_items WHERE ${whereStale}`, params);
 
   if (!response.ok) {
-    throw new Error(`linear feed sync: D1 prune failed with ${response.status}`);
+    throw new Error(`linear feed sync: D1 prune failed with ${response.status}: ${await response.text()}`);
   }
 
   const payload = (await response.json()) as { result?: { meta?: { changes?: number } }[] };
@@ -271,22 +323,14 @@ async function pruneStaleRows(config: SyncConfig, currentIds: string[]) {
 const LEGACY_MANUAL_SEED_IDS = ["BB-01", "BB-02", "BB-03", "BB-04"];
 
 async function removeLegacyManualSeed(config: SyncConfig) {
-  const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.cloudflareAccountId}/d1/database/${config.cloudflareDatabaseId}/query`;
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.cloudflareApiToken}`
-    },
-    body: JSON.stringify({
-      sql: `DELETE FROM public_feed_items WHERE workspace = ? AND id IN (${LEGACY_MANUAL_SEED_IDS.map(() => "?").join(", ")})`,
-      params: [config.workspace, ...LEGACY_MANUAL_SEED_IDS]
-    })
-  });
+  const response = await d1Query(
+    config,
+    `DELETE FROM public_feed_items WHERE workspace = ? AND id IN (${LEGACY_MANUAL_SEED_IDS.map(() => "?").join(", ")})`,
+    [config.workspace, ...LEGACY_MANUAL_SEED_IDS]
+  );
 
   if (!response.ok) {
-    throw new Error(`linear feed sync: legacy seed cleanup failed with ${response.status}`);
+    throw new Error(`linear feed sync: legacy seed cleanup failed with ${response.status}: ${await response.text()}`);
   }
 
   const payload = (await response.json()) as { result?: { meta?: { changes?: number } }[] };
