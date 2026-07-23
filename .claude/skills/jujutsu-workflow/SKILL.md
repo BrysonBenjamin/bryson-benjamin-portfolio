@@ -74,6 +74,39 @@ to move you off it, since `jj new main` creates a fresh, independent change and 
 `@` on the new one only if you were on the change you just navigated from. Switch back
 with `jj edit <change-id>` (found via `jj log`) to resume the WIP.
 
+## Handing off work between cloud containers
+
+jj has no sync of its own across machines — each container's `.jj` store (op log, undo
+history, unpushed changes) is local to that container only. The one channel between two
+containers is the same one git always had: the `origin` remote. There is no shared
+filesystem or second remote backing this repo, so anything not pushed to `origin` is
+invisible outside the container that made it.
+
+To move in-progress work from one container to another:
+
+**In the source container** (work can be unfinished — this is just for handoff, not a PR):
+```
+jj bookmark set wip-<topic> -r @
+jj git push --bookmark wip-<topic>
+```
+
+**In the destination container:**
+```
+bash scripts/setup-jj.sh   # if it's a fresh container
+jj git fetch
+jj new wip-<topic>@origin -m "continuing wip-<topic>"
+```
+
+Pushing a `wip-*` bookmark with no open PR does not trigger the `pull_request` CI job
+(that only fires on PR sync events), so parking WIP on `origin` for handoff is free —
+it won't burn a CI run by itself.
+
+jj's change-ids are stable content-addressed IDs, not just git SHAs, so once this work
+is fetched elsewhere and later amended or rebased, it's still recognized as the same
+logical change on subsequent pushes/fetches. That only applies after something has been
+pushed at least once, though — there's no way to reach into another container's
+unpushed local state.
+
 ## Cheat sheet
 
 | Goal | Command |
