@@ -48,7 +48,10 @@ export type SaSaSourceReference = {
 export type SaSaPageActionProposal = {
   actionId: string;
   label: string;
+  input: SaSaPageActionInput;
 };
+
+export type SaSaPageActionInput = Record<string, string>;
 
 export type SaSaPageActionResult = {
   actionId: string;
@@ -109,6 +112,14 @@ function isNonEmptyString(value: unknown, maxLength = 160): value is string {
 
 function isStringArray(value: unknown, maxLength: number) {
   return Array.isArray(value) && value.length <= maxLength && value.every((entry) => isNonEmptyString(entry));
+}
+
+function isBoundedStringRecord(value: unknown, maxEntries = 8): value is Record<string, string> {
+  return (
+    isRecord(value) &&
+    Object.keys(value).length <= maxEntries &&
+    Object.entries(value).every(([key, entry]) => isNonEmptyString(key, 64) && typeof entry === "string" && entry.length <= 160)
+  );
 }
 
 export function isSafePublicHref(value: unknown): value is string {
@@ -198,9 +209,17 @@ export function validateSaSaToolCall(value: unknown): SaSaValidationResult<SaSaT
     return { success: false, issues: ["Unknown tool or invalid tool input."] };
   }
 
-  if (!Object.values(value.input).every((entry) => typeof entry === "string" && entry.length <= 160)) {
+  if (!isBoundedStringRecord(value.input)) {
     return { success: false, issues: ["Tool inputs must be bounded strings."] };
   }
 
   return { success: true, data: value as SaSaToolCall };
+}
+
+export function validateSaSaPageActionProposal(value: unknown): SaSaValidationResult<SaSaPageActionProposal> {
+  if (!isRecord(value) || !isNonEmptyString(value.actionId) || !isNonEmptyString(value.label) || !isBoundedStringRecord(value.input)) {
+    return { success: false, issues: ["Invalid page action proposal."] };
+  }
+
+  return { success: true, data: value as SaSaPageActionProposal };
 }

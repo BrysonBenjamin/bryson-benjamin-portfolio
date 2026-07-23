@@ -10,7 +10,7 @@ describe("Sa-Sa scenes", () => {
         anchors: [{ id: "base-dock", placement: "inline-end", availability: "all" }],
         safeZones: [],
         content: [{ type: "section", id: "work" }],
-        actions: [{ id: "scroll-to-work", label: "Show work" }]
+        actions: [{ id: "scroll-to-section", label: "Show section" }]
       },
       {
         id: "overlay",

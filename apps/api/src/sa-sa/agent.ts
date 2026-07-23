@@ -7,6 +7,7 @@ import {
   type SaSaSourceReference,
   type SaSaToolCall,
   type SaSaTurnRequest,
+  validateSaSaPageActionProposal,
   validateSaSaToolCall
 } from "@bryson-benjamin/sa-sa-contracts";
 import { runPortfolioKnowledgeTool } from "./knowledge";
@@ -72,13 +73,13 @@ function determineTools(message: string): readonly SaSaToolCall[] {
 
 function determineAction(message: string, request: SaSaTurnRequest): SaSaPageActionProposal | null {
   if (/\b(open|show).{0,30}\b(second|2nd|work|project)/i.test(message)) {
-    const actionId = request.context.availableActionIds.find((id) => id === "scroll-to-work");
-    return actionId ? { actionId, label: "Show selected work" } : null;
+    const actionId = request.context.availableActionIds.find((id) => id === "scroll-to-section");
+    return actionId ? { actionId, label: "Show selected work", input: { sectionId: "work" } } : null;
   }
 
   if (/\b(about|who is bryson)\b/i.test(message)) {
-    const actionId = request.context.availableActionIds.find((id) => id === "scroll-to-about");
-    return actionId ? { actionId, label: "Show about Bryson" } : null;
+    const actionId = request.context.availableActionIds.find((id) => id === "scroll-to-section");
+    return actionId ? { actionId, label: "Show about Bryson", input: { sectionId: "about" } } : null;
   }
 
   return null;
@@ -86,7 +87,7 @@ function determineAction(message: string, request: SaSaTurnRequest): SaSaPageAct
 
 function answerFor(message: string, toolText: readonly string[], action: SaSaPageActionProposal | null) {
   if (action) {
-    return action.actionId === "scroll-to-work"
+    return action.input.sectionId === "work"
       ? "I found the second project: Linear feed bridge. I can take you to the selected work section."
       : "I can take you to the public About section."
   }
@@ -224,12 +225,13 @@ export function createSaSaAgentGateway({
       }
 
       const action = determineAction(request.message, request);
-      if (action) {
-        yield emit({ type: "action-proposed", action });
+      const validatedAction = validateSaSaPageActionProposal(action);
+      if (validatedAction.success) {
+        yield emit({ type: "action-proposed", action: validatedAction.data });
       }
 
       yield emit({ type: "behavior-requested", behavior: "speaking" });
-      for (const delta of textChunks(answerFor(request.message, toolText, action))) {
+      for (const delta of textChunks(answerFor(request.message, toolText, validatedAction.success ? validatedAction.data : null))) {
         if (signal?.aborted) {
           yield emit({ type: "failed", code: "cancelled", message: "Sa-Sa stopped that answer.", retryable: true });
           return;
