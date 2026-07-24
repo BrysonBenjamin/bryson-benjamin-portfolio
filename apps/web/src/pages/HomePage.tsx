@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import { ArrowRight, CircleCheck, ExternalLink, GitBranch, Mail } from "lucide-react";
+import { ArrowRight, CircleCheck, ExternalLink, FileText, GitBranch, Mail } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Mascot } from "../components/brand/Mascot";
 import { RiverBuildLog } from "../components/feed/RiverBuildLog";
 import { AsymmetricSection, StaggeredGrid } from "../components/layout/Asymmetric";
@@ -162,6 +163,10 @@ function HomePage() {
                 Email me
                 <Mail size={17} aria-hidden="true" />
               </a>
+              <Link className="bb-button bb-button--md bb-button--secondary" to="/research">
+                Research paper
+                <FileText size={17} aria-hidden="true" />
+              </Link>
               <a className="bb-button bb-button--md bb-button--ghost" href="https://github.com/BrysonBenjamin">
                 GitHub
                 <GitBranch size={17} aria-hidden="true" />
