@@ -5,5 +5,5 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=()
 
 /papers/*
-  X-Frame-Options: SAMEORIGIN
+  Content-Security-Policy: frame-ancestors 'self'
 
