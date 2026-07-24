@@ -1,4 +1,5 @@
 import { GitBranch, Mail } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Mascot } from "../brand/Mascot";
 import { ThemeToggle } from "../brand/ThemeToggle";
 
@@ -23,6 +24,7 @@ export function SiteHeader() {
               {item.label}
             </a>
           ))}
+          <Link to="/research">Research</Link>
         </nav>
 
         <div className="site-actions">

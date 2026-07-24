@@ -2175,7 +2175,8 @@ p {
   }
 
   .staggered-grid--cards,
-  .staggered-grid--compact {
+  .staggered-grid--compact,
+  .research-pillars {
     grid-template-columns: 1fr;
   }
 
@@ -2232,16 +2233,23 @@ p {
   }
 
   .hero-actions,
-  .contact-card__actions {
+  .contact-card__actions,
+  .research-hero__actions {
     align-items: stretch;
     flex-direction: column;
   }
 
   .hero-actions a,
   .contact-card__actions a,
+  .research-hero__actions a,
   .hero-actions .bb-button,
-  .contact-card__actions .bb-button {
+  .contact-card__actions .bb-button,
+  .research-hero__actions .bb-button {
     width: 100%;
+  }
+
+  .research-viewer iframe {
+    height: 70vh;
   }
 
   .work-current {
@@ -2579,4 +2587,180 @@ p {
   color: #eff6f3;
   font-size: 0.94rem;
   font-weight: 600;
+}
+
+.research-hero {
+  padding: clamp(72px, 10vw, 140px) 0 var(--space-7);
+}
+
+.research-hero h1 {
+  max-width: 800px;
+  margin-bottom: var(--space-4);
+  color: var(--text-body);
+  font-size: var(--text-display-sm);
+  font-weight: 800;
+  line-height: var(--leading-tight);
+  text-wrap: balance;
+}
+
+.research-byline {
+  margin-bottom: var(--space-5);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-body-sm);
+}
+
+.research-lead {
+  max-width: 640px;
+  margin-bottom: var(--space-6);
+  color: var(--text-secondary);
+  font-size: 1.08rem;
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.research-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.research-section {
+  padding: clamp(56px, 7vw, 96px) 0 0;
+}
+
+.research-read-section {
+  padding-bottom: clamp(76px, 9vw, 132px);
+}
+
+.research-abstract-card p {
+  margin-bottom: 0;
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+  line-height: var(--leading-body);
+  text-wrap: pretty;
+}
+
+.research-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.research-keywords__label {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.research-stat-card strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--text-body);
+  font-size: var(--text-h2);
+  font-weight: 800;
+  line-height: var(--leading-tight);
+}
+
+.research-stat-card p {
+  margin-bottom: 2px;
+  color: var(--text-body);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+  line-height: var(--leading-snug);
+}
+
+.research-stat-card__meta {
+  display: block;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.research-pillars {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.research-pillar-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.research-pillar-card__tag {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.research-pillar-card h3 {
+  margin: 0;
+  color: var(--text-body);
+  font-size: var(--text-h3);
+  font-weight: 750;
+  line-height: var(--leading-snug);
+}
+
+.research-pillar-card p {
+  margin-bottom: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-body-md);
+  line-height: var(--leading-body);
+}
+
+.research-coursework-card {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.research-coursework-card__label {
+  margin-bottom: 0;
+  color: var(--text-muted);
+  font-size: var(--text-body-sm);
+  font-weight: 600;
+}
+
+.research-viewer {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  box-shadow: var(--shadow-sm);
+}
+
+.research-viewer iframe {
+  display: block;
+  width: 100%;
+  height: min(920px, 82vh);
+  border: 0;
+}
+
+.research-viewer__fallback {
+  margin-top: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-body-sm);
+}
+
+.research-viewer__fallback a {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.research-citation {
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--line);
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: var(--leading-body);
 }
