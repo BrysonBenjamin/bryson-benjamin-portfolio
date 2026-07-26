@@ -18,3 +18,6 @@ outputs/tables/*
 # Jupyter
 .ipynb_checkpoints/
 *.egg-info/
+
+# Audit run logs (progress output only; results CSV is tracked)
+outputs/audit/*.log
