@@ -144,6 +144,43 @@ significance, and the new data points the other way. No individual eight-year
 era is significant on its own, though the sign is consistent within
 2000–2023 — so this reads as underpowered rather than as noise.
 
+## 7b. Specification curve (480 paths)
+
+Varying every analytic choice the paper made silently — sample end year, OT
+handling, blocked-kick handling, closeness cutoff, distance functional form,
+fixed-effect set, and whether the final minute is retained:
+
+- **97.3% of specifications produce a positive slope** — the direction is
+  extremely stable
+- **29.0% reach p < 0.05** — significance is a minority outcome
+- median AME **+0.275 pp per 100s** (paper claims 0.33)
+
+Which choice matters is unambiguous:
+
+| choice | median AME | share p<0.05 |
+|---|---|---|
+| **keep final 60s** | +0.376 pp | **57.9%** |
+| **drop final 60s** | +0.152 pp | **0.0%** |
+| quadratic distance (paper's) | +0.298 pp | 40.8% |
+| cubic distance | +0.265 pp | 17.1% |
+| exclude blocked (paper's) | +0.282 pp | 33.8% |
+| include blocked | +0.272 pp | 24.2% |
+| through 2023 (paper's) | +0.269 pp | 32.9% |
+| through 2025 | +0.276 pp | 25.0% |
+
+**Zero of 240 specifications reach significance once the final minute is
+removed** (largest z across all of them: 1.53). This is the cliff result
+restated as an exhaustive search rather than a single test.
+
+Two further notes. The paper's quadratic distance control more than doubles the
+significance rate versus a cubic (40.8% vs 17.1%) — the distance functional
+form is doing substantial work. And the effect is *weakest* under the tightest
+closeness definition (|Δ| ≤ 4: median +0.219 pp, 6.2% significant) and
+strongest at |Δ| ≤ 10 (+0.291 pp, 43.8%). Sample size only partly explains
+this — n falls from 4,417 to 2,556 — because the point estimate falls too.
+A pressure mechanism predicts the opposite ordering: genuinely tied games
+should show *more* pressure, not less. Worth arguing about.
+
 ## 8. Verdict
 
 **The paper is not wrong about there being something there. It is wrong about
