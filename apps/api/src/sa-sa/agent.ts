@@ -1,18 +1,18 @@
 import {
   saSaAgentLimits,
   saSaContractVersion,
+  validateSaSaBehaviorCue,
+  validateSaSaPageActionProposal,
+  validateSaSaToolCall,
   type SaSaAgentEvent,
   type SaSaAgentEventPayload,
-  type SaSaPageActionProposal,
   type SaSaSourceReference,
-  type SaSaToolCall,
-  type SaSaTurnRequest,
-  validateSaSaPageActionProposal,
-  validateSaSaToolCall
+  type SaSaTurnRequest
 } from "@bryson-benjamin/sa-sa-contracts";
 import { runPortfolioKnowledgeTool } from "./knowledge";
+import { createDeterministicSaSaModelAdapter, type SaSaModelAdapter } from "./model";
 
-type SaSaAgentMode = "disabled" | "deterministic";
+export type SaSaAgentMode = "disabled" | "deterministic" | "provider";
 
 type SaSaSession = {
   id: string;
@@ -20,6 +20,7 @@ type SaSaSession = {
   activeTurnId: string | null;
   completedTurns: Map<string, readonly SaSaAgentEvent[]>;
   recentTurnStarts: number[];
+  usage: { inputTokens: number; outputTokens: number };
 };
 
 export type SaSaAgentGateway = {
@@ -30,13 +31,21 @@ export type SaSaAgentGateway = {
 
 export type SaSaAgentGatewayOptions = {
   mode?: SaSaAgentMode;
+  adapter?: SaSaModelAdapter;
   now?: () => number;
   createId?: () => string;
+  turnDeadlineMs?: number;
+  dailySpendLimitCents?: number;
+  reservedTurnCostCents?: number;
 };
 
 const sessionLifetimeMs = 24 * 60 * 60 * 1000;
 const rateWindowMs = 60 * 1000;
 const maxTurnsPerMinute = 8;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 function hasPrivateDataRequest(message: string) {
   return /\b(password|secret|private linear|home address|social security|ssn|phone number)\b/i.test(message);
@@ -46,65 +55,33 @@ function hasInjectionRequest(message: string) {
   return /\b(ignore (all |previous )?instructions|reveal (the )?(prompt|system)|developer message)\b/i.test(message);
 }
 
-function textChunks(text: string) {
-  return text.match(/.{1,92}(?:\s|$)/g) ?? [text];
+function isTextDelta(output: Record<string, unknown>): output is Record<string, unknown> & { type: "text-delta"; delta: string } {
+  return output.type === "text-delta" && typeof output.delta === "string" && output.delta.length > 0;
 }
 
-function determineTools(message: string): readonly SaSaToolCall[] {
-  if (/\b(what|which).{0,50}\b(build|building|work|project)/i.test(message)) {
-    return [
-      { id: "get-profile", input: {} },
-      { id: "list-projects", input: {} }
-    ];
-  }
-
-  const projectMatch = message.match(/\b(portfolio|linear feed|design system)\b/i)?.[1]?.toLowerCase();
-  const projectId =
-    projectMatch === "portfolio"
-      ? "portfolio"
-      : projectMatch === "linear feed"
-        ? "linear-feed-bridge"
-        : projectMatch === "design system"
-          ? "design-system"
-          : null;
-
-  return projectId ? [{ id: "get-project", input: { id: projectId } }] : [{ id: "get-profile", input: {} }];
-}
-
-function determineAction(message: string, request: SaSaTurnRequest): SaSaPageActionProposal | null {
-  if (/\b(open|show).{0,30}\b(second|2nd|work|project)/i.test(message)) {
-    const actionId = request.context.availableActionIds.find((id) => id === "scroll-to-section");
-    return actionId ? { actionId, label: "Show selected work", input: { sectionId: "work" } } : null;
-  }
-
-  if (/\b(about|who is bryson)\b/i.test(message)) {
-    const actionId = request.context.availableActionIds.find((id) => id === "scroll-to-section");
-    return actionId ? { actionId, label: "Show about Bryson", input: { sectionId: "about" } } : null;
-  }
-
-  return null;
-}
-
-function answerFor(message: string, toolText: readonly string[], action: SaSaPageActionProposal | null) {
-  if (action) {
-    return action.input.sectionId === "work"
-      ? "I found the second project: Linear feed bridge. I can take you to the selected work section."
-      : "I can take you to the public About section."
-  }
-
-  if (/\b(what|which).{0,50}\b(build|building|work|project)/i.test(message)) {
-    return "Bryson is building a public portfolio that connects product planning, documentation, and a public build log. The current work also includes a label-gated Linear feed bridge and a small personal design system.";
-  }
-
-  return toolText[0] ?? "I only know the public portfolio facts that are available on this site.";
+function isUsage(output: Record<string, unknown>): output is Record<string, unknown> & { type: "usage"; inputTokens: number; outputTokens: number } {
+  return output.type === "usage" && Number.isInteger(output.inputTokens) && (output.inputTokens as number) >= 0 && Number.isInteger(output.outputTokens) && (output.outputTokens as number) >= 0;
 }
 
 export function createSaSaAgentGateway({
   mode = "disabled",
+  adapter = createDeterministicSaSaModelAdapter(),
   now = () => Date.now(),
-  createId = () => crypto.randomUUID()
+  createId = () => crypto.randomUUID(),
+  turnDeadlineMs = saSaAgentLimits.turnDeadlineMs,
+  dailySpendLimitCents = Number.POSITIVE_INFINITY,
+  reservedTurnCostCents = 0
 }: SaSaAgentGatewayOptions = {}): SaSaAgentGateway {
   const sessions = new Map<string, SaSaSession>();
+  const reservedDailySpend = new Map<string, number>();
+
+  function reserveTurnBudget() {
+    const day = new Date(now()).toISOString().slice(0, 10);
+    const reserved = reservedDailySpend.get(day) ?? 0;
+    if (reserved + reservedTurnCostCents > dailySpendLimitCents) return false;
+    reservedDailySpend.set(day, reserved + reservedTurnCostCents);
+    return true;
+  }
 
   function purgeExpiredSessions() {
     const current = now();
@@ -117,7 +94,7 @@ export function createSaSaAgentGateway({
     purgeExpiredSessions();
     const id = createId();
     const expiresAt = now() + sessionLifetimeMs;
-    sessions.set(id, { id, expiresAt, activeTurnId: null, completedTurns: new Map(), recentTurnStarts: [] });
+    sessions.set(id, { id, expiresAt, activeTurnId: null, completedTurns: new Map(), recentTurnStarts: [], usage: { inputTokens: 0, outputTokens: 0 } });
     return { id, expiresAt: new Date(expiresAt).toISOString(), mode };
   }
 
@@ -128,7 +105,6 @@ export function createSaSaAgentGateway({
 
   async function* streamTurn(request: SaSaTurnRequest, signal?: AbortSignal): AsyncGenerator<SaSaAgentEvent> {
     const session = getSession(request.sessionId);
-    const createdAt = () => new Date(now()).toISOString();
     const turnId = createId();
     let sequence = 0;
     const event = (payload: SaSaAgentEventPayload): SaSaAgentEvent => ({
@@ -136,7 +112,7 @@ export function createSaSaAgentGateway({
       sessionId: session?.id ?? "invalid",
       turnId,
       sequence: ++sequence,
-      createdAt: createdAt(),
+      createdAt: new Date(now()).toISOString(),
       payload
     });
 
@@ -144,23 +120,15 @@ export function createSaSaAgentGateway({
       yield event({ type: "failed", code: "invalid-request", message: "Start a new Sa-Sa session before sending a message.", retryable: true });
       return;
     }
-
     const replay = session.completedTurns.get(request.clientTurnId);
     if (replay) {
       yield* replay;
       return;
     }
-
     if (mode === "disabled") {
-      yield event({
-        type: "failed",
-        code: "agent-disabled",
-        message: "Sa-Sa's live guide is not enabled right now. You can still use the portfolio navigation.",
-        retryable: false
-      });
+      yield event({ type: "failed", code: "agent-disabled", message: "Sa-Sa's live guide is not enabled right now. You can still use the portfolio navigation.", retryable: false });
       return;
     }
-
     if (session.activeTurnId) {
       yield event({ type: "failed", code: "session-busy", message: "Sa-Sa is finishing the previous answer.", retryable: true });
       return;
@@ -172,14 +140,12 @@ export function createSaSaAgentGateway({
       yield event({ type: "failed", code: "rate-limited", message: "Sa-Sa needs a short breather before the next question.", retryable: true });
       return;
     }
-
     if (hasPrivateDataRequest(request.message) || hasInjectionRequest(request.message)) {
-      yield event({
-        type: "failed",
-        code: "policy-denied",
-        message: "I can only help with the approved public portfolio information and registered page actions.",
-        retryable: false
-      });
+      yield event({ type: "failed", code: "policy-denied", message: "I can only help with the approved public portfolio information and registered page actions.", retryable: false });
+      return;
+    }
+    if (!reserveTurnBudget()) {
+      yield event({ type: "failed", code: "rate-limited", message: "Sa-Sa has reached today's public-guide budget.", retryable: true });
       return;
     }
 
@@ -191,60 +157,113 @@ export function createSaSaAgentGateway({
       emitted.push(next);
       return next;
     };
+    const controller = new AbortController();
+    let timedOut = false;
+    const abort = () => controller.abort(signal?.reason);
+    if (signal?.aborted) {
+      abort();
+    } else {
+      signal?.addEventListener("abort", abort, { once: true });
+    }
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, turnDeadlineMs);
 
     try {
-      if (signal?.aborted) {
+      if (controller.signal.aborted) {
         yield emit({ type: "failed", code: "cancelled", message: "Sa-Sa stopped that answer.", retryable: true });
         return;
       }
-
       yield emit({ type: "accepted", message: "Sa-Sa is checking the public portfolio." });
       yield emit({ type: "behavior-requested", behavior: "thinking" });
 
-      const toolText: string[] = [];
+      let toolCalls = 0;
+      let outputCharacters = 0;
       const sources: SaSaSourceReference[] = [];
-      const calls = determineTools(request.message).slice(0, saSaAgentLimits.maxToolCallsPerTurn);
-
-      for (const call of calls) {
-        const validated = validateSaSaToolCall(call);
-        if (!validated.success) continue;
-        if (signal?.aborted) {
-          yield emit({ type: "failed", code: "cancelled", message: "Sa-Sa stopped that answer.", retryable: true });
+      for await (const output of adapter.streamTurn({ message: request.message, context: request.context }, controller.signal)) {
+        if (controller.signal.aborted) {
+          yield emit({ type: "failed", code: timedOut ? "timeout" : "cancelled", message: timedOut ? "Sa-Sa's guide took too long to answer." : "Sa-Sa stopped that answer.", retryable: true });
+          return;
+        }
+        if (!isRecord(output) || typeof output.type !== "string") {
+          yield emit({ type: "failed", code: "provider-output-invalid", message: "Sa-Sa received an invalid guide response.", retryable: true });
           return;
         }
 
-        yield emit({ type: "behavior-requested", behavior: "acting" });
-        yield emit({ type: "tool-started", tool: validated.data.id, label: "Checking public portfolio facts" });
-        const result = runPortfolioKnowledgeTool(validated.data);
-
-        if (result) {
-          toolText.push(result.text);
-          sources.push(...result.sources);
-          yield emit({ type: "tool-completed", tool: validated.data.id, sources: result.sources });
+        if (output.type === "tool-call") {
+          const call = validateSaSaToolCall(output.call);
+          if (!call.success || toolCalls >= saSaAgentLimits.maxToolCallsPerTurn) {
+            yield emit({ type: "failed", code: "policy-denied", message: "Sa-Sa could not use that requested capability.", retryable: false });
+            return;
+          }
+          toolCalls += 1;
+          yield emit({ type: "behavior-requested", behavior: "acting" });
+          yield emit({ type: "tool-started", tool: call.data.id, label: "Checking public portfolio facts" });
+          const result = runPortfolioKnowledgeTool(call.data);
+          if (result) sources.push(...result.sources);
+          yield emit({ type: "tool-completed", tool: call.data.id, sources: result?.sources ?? [] });
+          continue;
         }
-      }
 
-      const action = determineAction(request.message, request);
-      const validatedAction = validateSaSaPageActionProposal(action);
-      if (validatedAction.success) {
-        yield emit({ type: "action-proposed", action: validatedAction.data });
-      }
+        if (output.type === "action-proposed") {
+          const action = validateSaSaPageActionProposal(output.action);
+          if (!action.success || !request.context.availableActionIds.includes(action.data.actionId)) {
+            yield emit({ type: "failed", code: "policy-denied", message: "Sa-Sa could not use that requested page action.", retryable: false });
+            return;
+          }
+          yield emit({ type: "action-proposed", action: action.data });
+          continue;
+        }
 
-      yield emit({ type: "behavior-requested", behavior: "speaking" });
-      for (const delta of textChunks(answerFor(request.message, toolText, validatedAction.success ? validatedAction.data : null))) {
-        if (signal?.aborted) {
-          yield emit({ type: "failed", code: "cancelled", message: "Sa-Sa stopped that answer.", retryable: true });
+        if (output.type === "behavior-requested") {
+          const behavior = validateSaSaBehaviorCue(output.behavior);
+          if (!behavior.success) {
+            yield emit({ type: "failed", code: "provider-output-invalid", message: "Sa-Sa received an invalid behavior request.", retryable: true });
+            return;
+          }
+          yield emit({ type: "behavior-requested", behavior: behavior.data });
+          continue;
+        }
+
+        if (isTextDelta(output)) {
+          outputCharacters += output.delta.length;
+          if (outputCharacters > saSaAgentLimits.maxOutputCharacters) {
+            yield emit({ type: "failed", code: "policy-denied", message: "Sa-Sa's response exceeded its public-answer limit.", retryable: true });
+            return;
+          }
+          yield emit({ type: "behavior-requested", behavior: "speaking" });
+          yield emit({ type: "text-delta", delta: output.delta });
+          continue;
+        }
+
+        if (isUsage(output)) {
+          session.usage.inputTokens += output.inputTokens;
+          session.usage.outputTokens += output.outputTokens;
+          continue;
+        }
+
+        if (output.type !== "usage") {
+          yield emit({ type: "failed", code: "provider-output-invalid", message: "Sa-Sa received an unsupported guide response.", retryable: true });
           return;
         }
-        yield emit({ type: "text-delta", delta });
+        yield emit({ type: "failed", code: "provider-output-invalid", message: "Sa-Sa received invalid usage information.", retryable: true });
+        return;
+      }
+
+      if (controller.signal.aborted) {
+        yield emit({ type: "failed", code: timedOut ? "timeout" : "cancelled", message: timedOut ? "Sa-Sa's guide took too long to answer." : "Sa-Sa stopped that answer.", retryable: true });
+        return;
       }
 
       yield emit({ type: "behavior-requested", behavior: "success" });
       yield emit({ type: "completed", sources });
       session.completedTurns.set(request.clientTurnId, emitted);
     } catch {
-      yield emit({ type: "failed", code: "unavailable", message: "Sa-Sa could not reach the public guide just now.", retryable: true });
+      yield emit({ type: "failed", code: timedOut ? "timeout" : "provider-failure", message: timedOut ? "Sa-Sa's guide took too long to answer." : "Sa-Sa could not reach the public guide just now.", retryable: true });
     } finally {
+      clearTimeout(deadline);
+      signal?.removeEventListener("abort", abort);
       session.activeTurnId = null;
     }
   }

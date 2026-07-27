@@ -33,9 +33,39 @@ export type SaSaTurnRequest = {
 export const saSaToolIds = ["get-profile", "list-projects", "get-project", "search-build-log", "get-build-log-item"] as const;
 export type SaSaToolId = (typeof saSaToolIds)[number];
 
+export const saSaCapabilityRiskClasses = ["read-public", "local-navigation", "model-cue"] as const;
+export type SaSaCapabilityRiskClass = (typeof saSaCapabilityRiskClasses)[number];
+
+export type SaSaCapabilityDefinition = {
+  id: string;
+  kind: "tool" | "page-action" | "body-cue";
+  executor: "server" | "client";
+  risk: SaSaCapabilityRiskClass;
+  autoRun: boolean;
+  timeoutMs: number;
+  retryable: boolean;
+  description: string;
+};
+
+/** Shared semantic allowlist. Page routes still own their action-specific input schema. */
+export const saSaCapabilityDefinitions: readonly SaSaCapabilityDefinition[] = [
+  { id: "get-profile", kind: "tool", executor: "server", risk: "read-public", autoRun: true, timeoutMs: 3_000, retryable: true, description: "Read the approved public profile." },
+  { id: "list-projects", kind: "tool", executor: "server", risk: "read-public", autoRun: true, timeoutMs: 3_000, retryable: true, description: "List approved public projects." },
+  { id: "get-project", kind: "tool", executor: "server", risk: "read-public", autoRun: true, timeoutMs: 3_000, retryable: true, description: "Read one approved public project." },
+  { id: "search-build-log", kind: "tool", executor: "server", risk: "read-public", autoRun: true, timeoutMs: 3_000, retryable: true, description: "Search the approved public build log." },
+  { id: "get-build-log-item", kind: "tool", executor: "server", risk: "read-public", autoRun: true, timeoutMs: 3_000, retryable: true, description: "Read one approved public build-log item." },
+  { id: "page-action", kind: "page-action", executor: "client", risk: "local-navigation", autoRun: true, timeoutMs: 1_500, retryable: false, description: "Run a registered reversible page action." },
+  { id: "behavior-cue", kind: "body-cue", executor: "client", risk: "model-cue", autoRun: true, timeoutMs: 0, retryable: false, description: "Request a bounded character behavior cue." }
+] as const;
+
 export type SaSaToolCall = {
   id: SaSaToolId;
   input: Record<string, string>;
+};
+
+export type SaSaToolResult = {
+  tool: SaSaToolId;
+  sources: readonly SaSaSourceReference[];
 };
 
 export type SaSaSourceReference = {
@@ -53,9 +83,12 @@ export type SaSaPageActionProposal = {
 
 export type SaSaPageActionInput = Record<string, string>;
 
+export const saSaPageActionOutcomes = ["completed", "unavailable", "denied", "timed-out", "failed"] as const;
+export type SaSaPageActionOutcome = (typeof saSaPageActionOutcomes)[number];
+
 export type SaSaPageActionResult = {
   actionId: string;
-  outcome: "completed" | "unavailable" | "failed";
+  outcome: SaSaPageActionOutcome;
   message: string;
 };
 
@@ -77,6 +110,9 @@ export type SaSaAgentFailureCode =
   | "rate-limited"
   | "session-busy"
   | "unavailable"
+  | "timeout"
+  | "provider-failure"
+  | "provider-output-invalid"
   | "cancelled"
   | "policy-denied";
 
@@ -95,6 +131,8 @@ export const saSaAgentLimits = {
   maxContextItems: 12,
   maxActionIds: 16,
   maxToolCallsPerTurn: 3,
+  maxToolRoundsPerTurn: 1,
+  maxOutputCharacters: 4_000,
   turnDeadlineMs: 15_000
 } as const;
 
@@ -120,6 +158,12 @@ function isBoundedStringRecord(value: unknown, maxEntries = 8): value is Record<
     Object.keys(value).length <= maxEntries &&
     Object.entries(value).every(([key, entry]) => isNonEmptyString(key, 64) && typeof entry === "string" && entry.length <= 160)
   );
+}
+
+export function validateSaSaPageActionInput(value: unknown): SaSaValidationResult<SaSaPageActionInput> {
+  return isBoundedStringRecord(value)
+    ? { success: true, data: value }
+    : { success: false, issues: ["Page action inputs must be bounded strings."] };
 }
 
 export function isSafePublicHref(value: unknown): value is string {
@@ -204,6 +248,12 @@ export function validateSaSaSourceReference(value: unknown): SaSaValidationResul
   return { success: true, data: value as SaSaSourceReference };
 }
 
+export function validateSaSaBehaviorCue(value: unknown): SaSaValidationResult<SaSaBehaviorCue> {
+  return typeof value === "string" && ["thinking", "acting", "speaking", "success", "error", "offline"].includes(value)
+    ? { success: true, data: value as SaSaBehaviorCue }
+    : { success: false, issues: ["Invalid behavior cue."] };
+}
+
 export function validateSaSaToolCall(value: unknown): SaSaValidationResult<SaSaToolCall> {
   if (!isRecord(value) || !saSaToolIds.includes(value.id as SaSaToolId) || !isRecord(value.input)) {
     return { success: false, issues: ["Unknown tool or invalid tool input."] };
@@ -213,13 +263,56 @@ export function validateSaSaToolCall(value: unknown): SaSaValidationResult<SaSaT
     return { success: false, issues: ["Tool inputs must be bounded strings."] };
   }
 
-  return { success: true, data: value as SaSaToolCall };
+  const input = value.input as Record<string, string>;
+  const requiresEmptyInput = value.id === "get-profile" || value.id === "list-projects";
+  const requiresId = value.id === "get-project" || value.id === "get-build-log-item";
+  if (requiresEmptyInput && Object.keys(input).length !== 0) {
+    return { success: false, issues: ["This tool does not accept input."] };
+  }
+  if (requiresId && (Object.keys(input).length !== 1 || !isNonEmptyString(input.id))) {
+    return { success: false, issues: ["This tool requires one bounded id."] };
+  }
+  if (value.id === "search-build-log" && (Object.keys(input).length !== 1 || !isNonEmptyString(input.query))) {
+    return { success: false, issues: ["Build-log search requires one bounded query."] };
+  }
+
+  return { success: true, data: { id: value.id as SaSaToolId, input } };
+}
+
+export function validateSaSaToolResult(value: unknown): SaSaValidationResult<SaSaToolResult> {
+  if (!isRecord(value) || !saSaToolIds.includes(value.tool as SaSaToolId) || !Array.isArray(value.sources)) {
+    return { success: false, issues: ["Invalid tool result."] };
+  }
+  const sources: SaSaSourceReference[] = [];
+  for (const candidate of value.sources) {
+    const source = validateSaSaSourceReference(candidate);
+    if (!source.success) return { success: false, issues: ["Tool results require valid public sources."] };
+    sources.push(source.data);
+  }
+  return { success: true, data: { tool: value.tool as SaSaToolId, sources } };
+}
+
+export function validateSaSaPageActionResult(value: unknown): SaSaValidationResult<SaSaPageActionResult> {
+  if (
+    !isRecord(value) ||
+    !isNonEmptyString(value.actionId) ||
+    typeof value.outcome !== "string" ||
+    !saSaPageActionOutcomes.includes(value.outcome as SaSaPageActionOutcome) ||
+    !isNonEmptyString(value.message)
+  ) {
+    return { success: false, issues: ["Invalid page action result."] };
+  }
+
+  return { success: true, data: value as SaSaPageActionResult };
 }
 
 export function validateSaSaPageActionProposal(value: unknown): SaSaValidationResult<SaSaPageActionProposal> {
-  if (!isRecord(value) || !isNonEmptyString(value.actionId) || !isNonEmptyString(value.label) || !isBoundedStringRecord(value.input)) {
+  if (!isRecord(value) || !isNonEmptyString(value.actionId) || !isNonEmptyString(value.label)) {
     return { success: false, issues: ["Invalid page action proposal."] };
   }
 
-  return { success: true, data: value as SaSaPageActionProposal };
+  const input = validateSaSaPageActionInput(value.input);
+  if (!input.success) return input;
+
+  return { success: true, data: { ...value, input: input.data } as SaSaPageActionProposal };
 }

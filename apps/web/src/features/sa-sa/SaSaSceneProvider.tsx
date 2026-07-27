@@ -15,9 +15,12 @@ import {
   type SaSaContextSnapshot,
   type SaSaSceneDefinition
 } from "./scenes";
-import type { SaSaPageActionInput, SaSaPageActionResult } from "@bryson-benjamin/sa-sa-contracts";
-
-type SaSaPageActionHandler = (input: SaSaPageActionInput) => void | Promise<void>;
+import {
+  createSaSaPageActionRegistry,
+  type SaSaPageActionHandler,
+  type SaSaPageActionInputValidator
+} from "./pageActions";
+import type { SaSaPageActionResult } from "@bryson-benjamin/sa-sa-contracts";
 
 type SaSaSceneContextValue = {
   registerScene: (scene: SaSaSceneDefinition) => () => void;
@@ -25,8 +28,8 @@ type SaSaSceneContextValue = {
   registerSafeZone: (id: string, element: HTMLElement) => () => void;
   getAnchorElement: (id: string) => HTMLElement | null;
   getSafeZoneElement: (id: string) => HTMLElement | null;
-  registerAction: (id: string, handler: SaSaPageActionHandler) => () => void;
-  runAction: (id: string, input: SaSaPageActionInput) => Promise<SaSaPageActionResult>;
+  registerAction: (id: string, handler: SaSaPageActionHandler, validateInput: SaSaPageActionInputValidator) => () => void;
+  runAction: (id: string, input: unknown) => Promise<SaSaPageActionResult>;
   snapshot: SaSaContextSnapshot;
 };
 
@@ -36,7 +39,7 @@ export function SaSaSceneProvider({ children }: PropsWithChildren) {
   const scenesRef = useRef(new Map<string, SaSaSceneDefinition>());
   const anchorsRef = useRef(new Map<string, HTMLElement>());
   const safeZonesRef = useRef(new Map<string, HTMLElement>());
-  const actionsRef = useRef(new Map<string, SaSaPageActionHandler>());
+  const actionsRef = useRef(createSaSaPageActionRegistry());
   const [revision, setRevision] = useState(0);
 
   const registerElement = useCallback(
@@ -82,32 +85,15 @@ export function SaSaSceneProvider({ children }: PropsWithChildren) {
     [revision]
   );
 
-  const registerAction = useCallback((id: string, handler: SaSaPageActionHandler) => {
-    actionsRef.current.set(id, handler);
-
-    return () => {
-      if (actionsRef.current.get(id) === handler) actionsRef.current.delete(id);
-    };
-  }, []);
+  const registerAction = useCallback(
+    (id: string, handler: SaSaPageActionHandler, validateInput: SaSaPageActionInputValidator) =>
+      actionsRef.current.register(id, handler, validateInput),
+    []
+  );
 
   const runAction = useCallback(
-    async (id: string, input: SaSaPageActionInput): Promise<SaSaPageActionResult> => {
-      if (!snapshot.availableActionIds.includes(id)) {
-        return { actionId: id, outcome: "unavailable", message: "That action is not available on this part of the site." };
-      }
-
-      const handler = actionsRef.current.get(id);
-      if (!handler) {
-        return { actionId: id, outcome: "unavailable", message: "That page action is not ready right now." };
-      }
-
-      try {
-        await handler(input);
-        return { actionId: id, outcome: "completed", message: "Done." };
-      } catch {
-        return { actionId: id, outcome: "failed", message: "That page action could not be completed." };
-      }
-    },
+    (id: string, input: unknown): Promise<SaSaPageActionResult> =>
+      actionsRef.current.run(id, input, snapshot.availableActionIds),
     [snapshot.availableActionIds]
   );
 
@@ -221,8 +207,12 @@ export function useSaSaSafeZone(id: string) {
 }
 
 /** Registers a page-owned, allowlisted action without exposing DOM instructions to the agent. */
-export function useSaSaPageAction(id: string, handler: SaSaPageActionHandler) {
+export function useSaSaPageAction(
+  id: string,
+  handler: SaSaPageActionHandler,
+  validateInput: SaSaPageActionInputValidator
+) {
   const { registerAction } = useSaSaScenes();
 
-  useEffect(() => registerAction(id, handler), [handler, id, registerAction]);
+  useEffect(() => registerAction(id, handler, validateInput), [handler, id, registerAction, validateInput]);
 }
