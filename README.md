@@ -19,6 +19,8 @@ apps/
   api/      Hono API for Render
 packages/
   db/       Drizzle schema, Neon client, migrations
+research/
+  nfl-field-goal-pressure/   standalone Python project, not part of the Bun workspace
 ```
 
 ## Local Development
@@ -84,6 +86,10 @@ Recommended production domains:
 
 The public feed is database-backed and syncs daily from Linear via a GitHub Actions workflow, mirroring only issues explicitly labeled `public-feed`.
 See [docs/linear-sync.md](docs/linear-sync.md) for the schedule, public gate, storage model, and required env vars.
+
+## Research recreation (Python)
+
+`research/nfl-field-goal-pressure/` is a standalone `uv`-managed Python project recreating the NFL field goal thesis hosted on the site (`apps/web/public/papers/`) on refreshed nflverse data. It's intentionally outside the Bun workspace — its own venv, its own lockfile — and isn't built, deployed, or typechecked by anything above. See its own [README](research/nfl-field-goal-pressure/README.md) for setup and the working roadmap.
 
 ## Sa-Sa framework
 

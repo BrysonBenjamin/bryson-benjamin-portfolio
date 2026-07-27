@@ -1,0 +1,23 @@
+# Environment
+.venv/
+__pycache__/
+*.pyc
+
+# Data caches (re-downloadable from nflverse-data; don't commit multi-season parquet)
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Generated outputs (regenerate via src/nfl_field_goal_pressure scripts)
+outputs/figures/*
+!outputs/figures/.gitkeep
+outputs/tables/*
+!outputs/tables/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints/
+*.egg-info/
+
+# Audit run logs (progress output only; results CSV is tracked)
+outputs/audit/*.log

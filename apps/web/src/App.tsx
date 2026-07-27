@@ -8,6 +8,7 @@ import { SaSaProvider } from "./features/sa-sa/SaSaProvider";
 import { SaSaSceneProvider } from "./features/sa-sa/SaSaSceneProvider";
 import HomePage from "./pages/HomePage";
 import SaSaPlaygroundPage from "./pages/SaSaPlaygroundPage";
+import ResearchPage from "./pages/ResearchPage";
 import TaskPage from "./pages/TaskPage";
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
           <main aria-label="Bryson Benjamin portfolio">
             <Routes location={background ?? location}>
               <Route path="/" element={<HomePage />} />
+              <Route path="/research" element={<ResearchPage />} />
               <Route path="/log/:id" element={<TaskPage />} />
               <Route path="/sa-sa/playground" element={<SaSaPlaygroundPage />} />
             </Routes>
