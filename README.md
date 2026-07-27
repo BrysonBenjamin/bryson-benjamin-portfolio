@@ -1,6 +1,6 @@
 # Bryson Benjamin Portfolio
 
-A full-stack portfolio workspace for [brysonbenjamin.com](https://brysonbenjamin.com).
+Hi! This is a full-stack portfolio workspace for [brysonbenjamin.com](https://brysonbenjamin.com), where I feel like making anything I feel like making.
 
 ## Stack
 
