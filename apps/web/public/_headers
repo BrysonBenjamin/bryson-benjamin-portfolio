@@ -7,3 +7,5 @@
 /papers/*
   Content-Security-Policy: frame-ancestors 'self'
 
+/resume/*
+  Content-Security-Policy: frame-ancestors 'self'
