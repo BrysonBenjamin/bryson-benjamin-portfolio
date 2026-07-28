@@ -26,6 +26,7 @@ export function SiteHeader() {
             </a>
           ))}
           <Link to="/research">Research</Link>
+          <Link to="/resume">Resume</Link>
         </nav>
 
         <div className="site-actions">
